@@ -16,8 +16,21 @@ Compatibility is implemented and tested against the observed protocol. Native Au
 
 Install Docker with Compose v2 or newer, then:
 
+1. Download and extract `audiocity-VERSION-deploy.tar.gz` from the [latest release](https://github.com/LeoWattenberg/audiocity/releases/latest).
+2. Open a terminal in the extracted folder and run:
+
 ```sh
-cd ~/git/audiocity
+./deploy.sh
+docker compose logs audiocity
+```
+
+The script downloads the prebuilt Linux image for your Docker server (amd64 or arm64), checks its SHA-256 checksum, and starts the service. No registry account or build tools are needed. The bundle includes `.env.example`, client setup, and operations documentation. For offline deployment, download the matching Docker image archive from the same release, run `docker load -i FILE`, then `docker compose up -d --wait` inside the deployment folder. A compiled Node.js package and full source archive are also available; see [release packaging](docs/releases.md).
+
+To build from a source checkout instead:
+
+```sh
+git clone https://github.com/LeoWattenberg/audiocity.git
+cd audiocity
 docker compose up --build -d
 docker compose logs audiocity
 ```

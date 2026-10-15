@@ -1,0 +1,113 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: read
+
+jobs:
+  packages:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm install --global npm@12.0.1
+      - run: npm ci
+      - run: npm run check
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:browser
+      - run: npm run package
+      - run: npm run test:package
+      - uses: actions/upload-artifact@v7
+        with:
+          name: packages
+          path: dist/release/*.tar.gz
+          if-no-files-found: error
+
+  docker:
+    needs: packages
+    strategy:
+      matrix:
+        include:
+          - arch: amd64
+            runner: ubuntu-latest
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+      - uses: docker/setup-buildx-action@v4
+      - name: Build image
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          load: true
+          tags: audiocity:${{ github.ref_name }}
+          cache-from: type=gha,scope=${{ matrix.arch }}
+          cache-to: type=gha,scope=${{ matrix.arch }},mode=max
+      - name: Test deployment bundle and export image
+        env:
+          ARCH: ${{ matrix.arch }}
+        run: |
+          set -euo pipefail
+          version="${GITHUB_REF_NAME#v}"
+          docker tag "audiocity:$GITHUB_REF_NAME" "audiocity:$version"
+          mkdir -p dist/release
+          docker save "audiocity:$version" | gzip > "dist/release/audiocity-$version-docker-$ARCH.tar.gz"
+          # Exercise the same Docker load path used by offline installs.
+          docker image rm "audiocity:$version" "audiocity:$GITHUB_REF_NAME"
+          docker load -i "dist/release/audiocity-$version-docker-$ARCH.tar.gz"
+      - uses: actions/download-artifact@v8
+        with:
+          name: packages
+          path: dist/release
+      - name: Smoke test downloaded deployment package
+        run: |
+          set -euo pipefail
+          version="${GITHUB_REF_NAME#v}"
+          tar -xzf "dist/release/audiocity-$version-deploy.tar.gz" -C "$RUNNER_TEMP"
+          cd "$RUNNER_TEMP/audiocity-$version-deploy"
+          export AUDIOCITY_ADMIN_PASSWORD="$(openssl rand -hex 24)"
+          echo "::add-mask::$AUDIOCITY_ADMIN_PASSWORD"
+          export AUDIOCITY_PORT=18080 AUDIOCITY_PUBLIC_URL=http://localhost:18080
+          trap 'docker compose down -v' EXIT
+          ./deploy.sh
+          AUDIOCITY_URL=http://localhost:18080 AUDIOCITY_SMOKE_PASSWORD="$AUDIOCITY_ADMIN_PASSWORD" node "$GITHUB_WORKSPACE/scripts/smoke.ts"
+          curl --fail http://localhost:18080/source.tar.gz -o "$RUNNER_TEMP/source.tar.gz"
+          tar -tzf "$RUNNER_TEMP/source.tar.gz" | sort > "$RUNNER_TEMP/source-files"
+          grep -qx src/main.ts "$RUNNER_TEMP/source-files"
+      - uses: actions/upload-artifact@v7
+        with:
+          name: docker-${{ matrix.arch }}
+          path: dist/release/*-docker-*.tar.gz
+          if-no-files-found: error
+
+  publish:
+    needs: [packages, docker]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v8
+        with:
+          path: release
+          merge-multiple: true
+      - name: Publish release with checksums
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          cd release
+          sha256sum *.tar.gz > SHA256SUMS
+          gh release create "$GITHUB_REF_NAME" *.tar.gz SHA256SUMS \
+            --repo "$GITHUB_REPOSITORY" --verify-tag \
+            --title "Audiocity $GITHUB_REF_NAME" --notes-file ../.github/release-notes.md
