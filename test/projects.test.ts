@@ -28,23 +28,23 @@ async function complete(f: Awaited<ReturnType<typeof fixture>>, created: Created
 await test('native create, upload, completion and download follow Audacity DTO fields', async (t) => {
 	const f = await fixture(); t.after(() => f.cleanup());
 	const response = await f.app.inject({ method: 'POST', url: '/project', headers: auth(f.token), payload: { name: 'Session', blocks: ['AABBCC', 'DDEEFF'] } });
-	assert.equal(response.statusCode, 201, response.body);
+	assert.equal(response.statusCode, 200, response.body);
 	const created = response.json<Created>();
 	assert.equal(created.snapshot.date_synced, 0);
-	assert.equal(created.sync.blocks[0]?.id, 'AABBCC');
+	assert.equal(created.sync.blocks[0]?.id, 'aabbcc');
 	for (const key of ['id', 'username', 'author_name', 'slug', 'name', 'details', 'date_created', 'date_updated', 'size', 'head', 'latest_synced_snapshot_id']) assert.ok(key in created.project, key);
 	const premature = await f.app.inject({ method: 'POST', url: `/project/${created.project.id}/snapshot/${created.snapshot.id}/sync`, headers: auth(f.token) });
 	assert.equal(premature.statusCode, 409);
-	assert.equal((await complete(f, created)).statusCode, 200);
+	assert.equal((await complete(f, created)).statusCode, 204);
 	const repeat = await f.app.inject({ method: 'POST', url: `/project/${created.project.id}/snapshot/${created.snapshot.id}/sync`, headers: auth(f.token) });
-	assert.equal(repeat.statusCode, 200);
+	assert.equal(repeat.statusCode, 204);
 	const result = await f.app.inject({ url: `/project/${created.project.id}/snapshot/${created.snapshot.id}?expand=blocks,file_url`, headers: auth(f.token) });
 	const snapshot = result.json<Snapshot>();
 	assert.ok(snapshot.date_synced > 0);
 	assert.equal(snapshot.blocks.length, 2);
 	const file = await f.app.inject(path(snapshot.file_url));
 	assert.equal(file.body, 'opaque project metadata');
-	assert.equal((await f.app.inject(path(snapshot.blocks[0]!.url))).body, 'wavpack AABBCC');
+	assert.equal((await f.app.inject(path(snapshot.blocks[0]!.url))).body, 'wavpack aabbcc');
 	const list = await f.app.inject({ url: '/project?page=1&per-page=1&q=Session', headers: auth(f.token) });
 	assert.deepEqual(list.json<Listed<Snapshot>>().pagination, { total: 1, pages: 1, page: 1, size: 1 });
 });
@@ -82,7 +82,7 @@ await test('GET sync resumes only missing blocks and stale completion never repl
 	assert.deepEqual(resume.json<Created['sync']>().blocks.map((block: UploadDescriptor) => block.id), ['b']);
 	assert.equal(resume.json<Created['sync']>().file.url, '');
 	const newer = await create(`/project/${first.project.id}/snapshot`, { head_snapshot_id: first.snapshot.id, blocks: [] });
-	assert.equal((await complete(f, newer)).statusCode, 200);
+	assert.equal((await complete(f, newer)).statusCode, 204);
 	await upload(f.app, first.sync.blocks[1]!, Buffer.from('block b'));
 	assert.equal((await f.app.inject({ method: 'POST', url: resumeUrl, headers: auth(f.token) })).statusCode, 409);
 	const info = await f.app.inject({ url: `/project/${first.project.id}`, headers: auth(f.token) });
@@ -172,8 +172,9 @@ await test('resuming expired uploaded metadata retains its bytes and renews only
 	assert.equal((await f.app.inject({ method: 'POST', url: path(created.sync.file.success) })).statusCode, 403);
 	assert.equal((await f.app.inject({ method: 'POST', url: path(sync.file.success) })).statusCode, 200);
 	const completed = await f.app.inject({ method: 'POST', url: `/project/${created.project.id}/snapshot/${created.snapshot.id}/sync`, headers: auth(f.token) });
-	assert.equal(completed.statusCode, 200);
-	assert.equal((await f.app.inject(path(completed.json<Snapshot>().file_url))).body, 'already uploaded metadata');
+	assert.equal(completed.statusCode, 204);
+	const snapshot = await f.app.inject({ url: `/project/${created.project.id}/snapshot/${created.snapshot.id}`, headers: auth(f.token) });
+	assert.equal((await f.app.inject(path(snapshot.json<Snapshot>().file_url))).body, 'already uploaded metadata');
 });
 
 await test('pending archive validation and project data survive a server restart', async (t) => {

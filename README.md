@@ -62,6 +62,7 @@ For another machine or a public deployment, set the public HTTPS URL and place a
 - [Audio uploads, listing, editing, sharing and downloads](docs/audio-api.md)
 - [Project snapshots, whole-file archives, revisions, and resuming uploads](docs/project-protocol.md)
 - [Authentication, scopes, OAuth clients and password changes](docs/authentication.md)
+- [audio.com API compatibility and deliberate extensions](docs/audio-com-compatibility.md)
 - [Audacity and Soundscaper client configuration](docs/clients.md)
 - [Operations, recovery and backups](docs/operations.md)
 

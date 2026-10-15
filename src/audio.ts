@@ -130,6 +130,7 @@ export function registerAudioRoutes(app: FastifyInstance, ctx: Context): void {
 	async function create(request: FastifyRequest) {
 		const user = owner(request);
 		const body = objectBody(request.body);
+		if (request.routeOptions.url === '/v1/audio/create') requiredString(body.category, 'category', 32);
 		const mime = requiredString(body.mime, 'mime', 100);
 		audioFormat(mime);
 		if (!Number.isSafeInteger(body.size) || Number(body.size) < 1 || Number(body.size) > ctx.config.maxUploadBytes) {
@@ -139,7 +140,7 @@ export function registerAudioRoutes(app: FastifyInstance, ctx: Context): void {
 		const title = name.replace(/\.[^.]{1,8}$/, '') || name;
 		let row = validateMetadata(body, {
 			id: randomUUID(), owner_id: user.id, blob_id: '', name, title, slug: slug(title),
-			category: 'other', description: '', tags: '[]', license: 'none', visibility: 'private',
+			category: 'other', description: '', tags: '[]', license: 'none', visibility: 'unlisted',
 			is_downloadable: 0, duration: 0, created: now(), updated: now(),
 		});
 		if (body.slug === undefined) {
@@ -192,7 +193,7 @@ export function registerAudioRoutes(app: FastifyInstance, ctx: Context): void {
 	function list(request: FastifyRequest, legacy: boolean) {
 		const user = owner(request);
 		const query = objectBody(request.query);
-		const { page, perPage, search } = pageQuery(request.query);
+		const { page, perPage, search } = pageQuery(legacy ? query : { 'per-page': 50, ...query });
 		const sort = query.sort ?? 'newest';
 		if (typeof sort !== 'string' || !['newest', 'oldest', 'az'].includes(sort)) throw new ApiError(422, 'sort must be newest, oldest, or az.', 'ValidationError');
 		const order = sort === 'az' ? 'title COLLATE NOCASE ASC,id ASC' : `created ${sort === 'oldest' ? 'ASC' : 'DESC'},rowid ${sort === 'oldest' ? 'ASC' : 'DESC'}`;

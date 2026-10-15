@@ -16,7 +16,7 @@ export function scopeValue(value: unknown, fallback = 'public'): string {
 	if (value !== undefined && typeof value !== 'string') throw new ApiError(422, 'OAuth scope must be a string.');
 	const scopes = typeof value === 'string' && value.trim() ? value.trim().split(/\s+/) : fallback.split(/\s+/);
 	if (scopes.some(scope => !['public', 'projects', 'all'].includes(scope))) throw new ApiError(422, 'Unsupported OAuth scope.');
-	return scopes.includes('all') ? 'all' : [...new Set(scopes)].sort().join(' ');
+	return [...new Set(scopes)].sort().join(' ');
 }
 function passwordKey(password: string, salt: string): Promise<Buffer> {
 	return new Promise((resolve, reject) => {
@@ -125,6 +125,9 @@ export class Authentication implements AuthService {
 		const row = token ? this.db.get<TokenRow>('SELECT * FROM auth_tokens WHERE access_hash = ? AND access_expires > ?', digest(token), now()) : undefined;
 		if (!row) throw new ApiError(401, 'A valid bearer token is required.', 'Unauthorized');
 		const scopes = row.scope.split(' ');
+		if (scope === 'projects' && scopes.includes('public') && !scopes.includes('projects')) {
+			throw new ApiError(403, 'This token is limited to the public API.', 'Forbidden');
+		}
 		if (scope === 'projects' && !scopes.includes('all') && !scopes.includes('projects')) {
 			throw new ApiError(403, 'This token does not grant project access.', 'Forbidden');
 		}

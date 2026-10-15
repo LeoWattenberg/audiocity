@@ -33,7 +33,7 @@ await test('restoring data to a new directory and origin preserves bytes and res
 	assert.equal(new URL(resumed.blocks[0]!.url).origin, origin);
 	assert.equal(new URL(resumed.mixdown.url).origin, origin);
 	await upload(restored.app, resumed.blocks[0]!, Buffer.from('resumed block'));
-	assert.equal((await restored.app.inject({ method: 'POST', url: `${base}/sync`, headers: auth(f.token) })).statusCode, 200);
+	assert.equal((await restored.app.inject({ method: 'POST', url: `${base}/sync`, headers: auth(f.token) })).statusCode, 204);
 	const complete = (await restored.app.inject({ url: base, headers: auth(f.token) })).json<Created['snapshot']>();
 	assert.equal((await restored.app.inject(relative(complete.blocks[0]!.url))).body, 'resumed block');
 	const archiveBase = `/project/${archive.project.id}/snapshot/${archive.snapshot.id}`;
@@ -53,5 +53,5 @@ await test('resuming at the same origin preserves active upload capabilities', a
 	assert.deepEqual(again, created.sync);
 	await upload(f.app, created.sync.file, Buffer.from('stable metadata'));
 	await upload(f.app, created.sync.blocks[0]!, Buffer.from('stable block'));
-	assert.equal((await f.app.inject({ method: 'POST', url: base, headers: auth(f.token) })).statusCode, 200);
+	assert.equal((await f.app.inject({ method: 'POST', url: base, headers: auth(f.token) })).statusCode, 204);
 });

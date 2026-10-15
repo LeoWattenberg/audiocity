@@ -26,7 +26,7 @@ export function registerProjectRoutes(app: FastifyInstance, ctx: Context): void 
 			const snapshot = createSnapshot(ctx, project, { ...form, head: '', force: false });
 			return { project: projectInfo(ctx, getProject(ctx, user, project.id)), snapshot: snapshotInfo(ctx, snapshot), sync: syncState(ctx, project, snapshot) };
 		});
-		return reply.code(201).send(result);
+		return reply.code(result.snapshot.transport === 'blocks' ? 200 : 201).send(result);
 	});
 	app.get('/project', (request) => {
 		const user = ctx.auth.requireUser(request, 'projects'); const query = objectBody(request.query);
@@ -59,7 +59,7 @@ export function registerProjectRoutes(app: FastifyInstance, ctx: Context): void 
 			const snapshot = createSnapshot(ctx, project, form);
 			return { project: projectInfo(ctx, getProject(ctx, user, project.id)), snapshot: snapshotInfo(ctx, snapshot), sync: syncState(ctx, project, snapshot) };
 		});
-		return reply.code(201).send(result);
+		return reply.code(result.snapshot.transport === 'blocks' ? 200 : 201).send(result);
 	});
 	app.get('/project/:projectId/snapshot', (request) => {
 		const user = ctx.auth.requireUser(request, 'projects'); const project = getProject(ctx, user, ids(request).projectId);
@@ -76,9 +76,11 @@ export function registerProjectRoutes(app: FastifyInstance, ctx: Context): void 
 		const user = ctx.auth.requireUser(request, 'projects'); const project = getProject(ctx, user, ids(request).projectId);
 		return syncState(ctx, project, getSnapshot(ctx, project, ids(request).snapshotId), true);
 	});
-	app.post('/project/:projectId/snapshot/:snapshotId/sync', (request) => {
+	app.post('/project/:projectId/snapshot/:snapshotId/sync', (request, reply) => {
 		const user = ctx.auth.requireUser(request, 'projects'); const project = getProject(ctx, user, ids(request).projectId);
-		return completeSnapshot(ctx, project, getSnapshot(ctx, project, ids(request).snapshotId));
+		const snapshot = getSnapshot(ctx, project, ids(request).snapshotId);
+		const result = completeSnapshot(ctx, project, snapshot);
+		return snapshot.format === 'audacity' ? reply.code(204).send() : result;
 	});
 	app.delete('/project/:projectId/snapshot/:snapshotId', async (request, reply) => {
 		const user = ctx.auth.requireUser(request, 'projects'); const project = getProject(ctx, user, ids(request).projectId);

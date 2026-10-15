@@ -11,7 +11,7 @@ const headers = (token: string) => ({ authorization: `Bearer ${token}` });
 async function recording(f: Awaited<ReturnType<typeof fixture>>, token: string, metadata: Record<string, unknown>, ready = true) {
 	const bytes = Buffer.from('fLaCfixture');
 	const result = await f.app.inject({ method: 'POST', url: '/v1/audio/create', headers: headers(token), payload: {
-		mime: 'audio/flac', size: bytes.length, name: 'Recording.flac', ...metadata,
+		mime: 'audio/flac', size: bytes.length, name: 'Recording.flac', category: 'recording', ...metadata,
 	} });
 	assert.equal(result.statusCode, 201, result.body);
 	const policy = result.json<AudioPolicy>();
@@ -25,7 +25,7 @@ void test('v1 search discovers ready public recordings across accounts without e
 		const other = await createUser(f.app, f.token);
 		const own = await recording(f, f.token, { title: 'Own listed rain', is_listed: true });
 		const shared = await recording(f, other.token, { title: 'Other listed rain', visibility: 'public' });
-		await recording(f, f.token, { title: 'Private rain' });
+		await recording(f, f.token, { title: 'Private rain', visibility: 'private' });
 		await recording(f, other.token, { title: 'Unlisted rain', is_listed: false });
 		await recording(f, f.token, { title: 'Pending rain', is_listed: true }, false);
 		const result = await f.app.inject({ url: '/v1/search?types=audio&query=RAIN&page=1', headers: headers(f.token) });

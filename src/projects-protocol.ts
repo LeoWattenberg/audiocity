@@ -14,7 +14,7 @@ export function snapshotInfo(ctx: Context, snapshot: SnapshotRow, expand = false
 		format: snapshot.format, transport: snapshot.format === 'audacity' ? 'blocks' : 'file',
 		...(expand ? {
 			file_url: file ? ctx.blobs.downloadUrl(file.id) : '',
-			blocks: blocks.filter((block) => ctx.blobs.ready(block.blob_id)).map((block) => ({ hash: block.hash, url: ctx.blobs.downloadUrl(block.blob_id) })),
+			blocks: blocks.filter((block) => ctx.blobs.ready(block.blob_id)).map((block) => ({ hash: block.hash.toLowerCase(), url: ctx.blobs.downloadUrl(block.blob_id) })),
 		} : {}),
 	};
 }
@@ -71,7 +71,7 @@ export function syncState(ctx: Context, project: ProjectRow, snapshot: SnapshotR
 		mixdown: renew && ctx.blobs.ready(snapshot.mixdown_id) ? { id: snapshot.mixdown_id, url: '', success: '', fail: '' } : descriptor(snapshot.mixdown_upload),
 		blocks: missing.map((block) => {
 			const current = renew ? replaceFailedBlock(ctx, block) : block;
-			return { ...descriptor(current.upload), id: current.hash };
+			return { ...descriptor(current.upload), id: current.hash.toLowerCase() };
 		}),
 	};
 }

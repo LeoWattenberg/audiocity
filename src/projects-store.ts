@@ -37,6 +37,7 @@ export function projectSchema(ctx: Context): void {
 			snapshot_id TEXT NOT NULL REFERENCES snapshots(id) ON DELETE CASCADE,
 			owner_id TEXT NOT NULL, hash TEXT NOT NULL, PRIMARY KEY(snapshot_id, hash)
 		);
+		CREATE INDEX IF NOT EXISTS project_blocks_canonical_hash ON project_blocks(owner_id, lower(hash));
 	`);
 }
 
@@ -45,7 +46,7 @@ export function projectForm(body: Record<string, unknown>): ProjectForm {
 	if (format !== undefined && !['aup3', 'aup4', 'audacity'].includes(format)) throw new ApiError(422, 'format must be audacity, aup3 or aup4.', 'ValidationError');
 	const blocks = body.blocks ?? [];
 	if (!Array.isArray(blocks) || blocks.length > 100_000) throw new ApiError(422, 'blocks must contain at most 100000 hashes.', 'ValidationError');
-	const hashes = [...new Set(blocks.map((hash: unknown) => requiredString(hash, 'block hash', 256)))];
+	const hashes = [...new Set(blocks.map((hash: unknown) => requiredString(hash, 'block hash', 256).toLowerCase()))];
 	if (hashes.some((hash) => !/^[A-Za-z0-9_-]+$/.test(hash))) throw new ApiError(422, 'Block hashes must be alphanumeric, underscores or hyphens.', 'ValidationError');
 	if (format && format !== 'audacity' && hashes.length) throw new ApiError(422, 'Whole-file projects do not accept audio block hashes.', 'ValidationError');
 	const size = body.size === undefined ? undefined : Number(body.size);
@@ -99,13 +100,15 @@ export function createSnapshot(ctx: Context, project: ProjectRow, form: ProjectF
 	const mixdown = ctx.blobs.create(project.owner_id, { kind: 'project-mixdown', resourceId: id, mime: 'audio/wav' });
 	ctx.db.run('INSERT INTO snapshots (id,project_id,parent_id,previous_head_id,format,file_id,file_upload,mixdown_id,mixdown_upload,created,updated) VALUES (?,?,?,?,?,?,?,?,?,?,?)', id, project.id, form.head || project.head_id, project.head_id, format, file.id, JSON.stringify(file), mixdown.id, JSON.stringify(mixdown), date, date);
 	for (const hash of form.hashes) {
-		let block = ctx.db.get<BlockRow>('SELECT * FROM project_blocks WHERE owner_id=? AND hash=?', project.owner_id, hash);
+		let block = ctx.db.get<BlockRow>(`SELECT b.* FROM project_blocks b LEFT JOIN blobs ON blobs.id=b.blob_id
+			WHERE b.owner_id=? AND lower(b.hash)=?
+			ORDER BY CASE WHEN blobs.state='ready' THEN 0 ELSE 1 END, b.rowid LIMIT 1`, project.owner_id, hash);
 		if (!block) {
 			const descriptor = ctx.blobs.create(project.owner_id, { kind: 'project-block', resourceId: hash, mime: 'application/octet-stream', maxBytes: 64 * 1024 * 1024 });
 			block = { owner_id: project.owner_id, hash, blob_id: descriptor.id, upload: JSON.stringify(descriptor) };
 			ctx.db.run('INSERT INTO project_blocks (owner_id,hash,blob_id,upload) VALUES (?,?,?,?)', project.owner_id, hash, descriptor.id, block.upload);
 		}
-		ctx.db.run('INSERT INTO snapshot_blocks (snapshot_id,owner_id,hash) VALUES (?,?,?)', id, project.owner_id, hash);
+		ctx.db.run('INSERT INTO snapshot_blocks (snapshot_id,owner_id,hash) VALUES (?,?,?)', id, project.owner_id, block.hash);
 	}
 	ctx.db.run('UPDATE projects SET head_id=?,updated=?,name=?,details=? WHERE id=?', id, date, form.name ?? project.name, form.details ?? project.details, project.id);
 	return getSnapshot(ctx, project, id);

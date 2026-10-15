@@ -36,7 +36,9 @@ Refresh with POST `/auth/token`:
 
 Include the original `client_id` for an OAuth client, and `client_secret` for the configured Audacity client. Each refresh invalidates both previous tokens and returns a new pair. Refresh tokens last 30 days; access tokens last `AUDIOCITY_TOKEN_TTL_SECONDS` (3600 seconds by default). A refresh may reduce its scope but cannot expand it. POST `/auth/logout` with a bearer token revokes that token and its corresponding refresh token.
 
-Scopes are `public` for regular audio, `projects` for project synchronization, and `all` for both and the account owner's permitted administration. Multiple scopes can be space-separated. A token issued to an administrator still needs `all` for `/admin/users`.
+Scopes are `public` for regular audio and `all` for native project synchronization and the account owner's permitted administration. As observed on audio.com, including `public` confines a token to the public API even if `all` is also present. A refresh requesting the already authorized subset `all` removes that restriction. Do not combine `public all` when native project access is intended. A token issued to an administrator still needs exactly `all` for `/admin/users`.
+
+`projects` is an Audiocity extension retained for existing self-hosted clients. Explicit `public projects` grants regular audio and local project storage without administrator APIs. This extension is not supported by audio.com and should only be requested after detecting Audiocity's capabilities. OAuth access lifetime is server policy, not a fixed protocol constant: audio.com has returned one-year access tokens without the optional `scope` response field, while Audiocity retains a configurable one-hour default and includes the granted scope. Clients must accept either valid response shape and use its actual `expires_in`.
 
 ## Change or recover a password
 

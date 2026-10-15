@@ -21,7 +21,7 @@ Send a bearer token with audio access to `POST /v1/audio/create`:
 }
 ```
 
-The `201` response contains `audio` metadata and capability URLs `url`, `success`,
+The public API requires `mime`, `size` and `category`. The `201` response contains `audio` metadata and capability URLs `url`, `success`,
 `fail`, and `progress`. `id` identifies the binary transfer; `audio.id` identifies
 the audio resource. PUT the original bytes to `url` and then POST `success` (GET
 is also accepted). Sending DELETE to `fail` cancels an unfinished upload. These
@@ -47,7 +47,7 @@ IDs may be UUIDs or `slug:your-audio-slug` for the owner's library.
 | `PATCH /v1/audio/update?id=…` | Edit title, slug, category, description, tags, license, visibility, or download permission |
 | `POST /v1/audio/delete?id=…` | Delete owned metadata and source bytes; returns `204` |
 
-Listing accepts `page` and `per-page` (1–100), `sort=newest`, `oldest`, or `az`, and
+Listing accepts `page` and `per-page` (1–100, default 50), `sort=newest`, `oldest`, or `az`, and
 `q` for a title substring. Audio metadata includes `play.url` for ready uploads;
 this is a temporary signed URL supporting `Range` requests. Refresh metadata when
 a playback URL expires.
@@ -76,16 +76,19 @@ it does not rank results by relevance or return author and collection results.
 
 ## Sharing
 
-New uploads default to `visibility: "private"`. The owner must explicitly opt into
-sharing:
+New API uploads default to unlisted, matching audio.com's documented
+`is_listed: false` default. Audiocity's own console explicitly selects private
+sharing by default. The additional `visibility` field can select:
 
 - `private`: owner access only; excluded from public metadata and discovery.
 - `unlisted`: anyone with the resource URL can listen; excluded from discovery.
 - `public`: anyone can listen; included in `GET /public/audio` discovery.
 
-For audio.com compatibility, explicitly providing `is_listed: true` means public,
-and explicitly providing `is_listed: false` means unlisted. Omitting the field
-keeps the private default. Explicit `visibility` takes precedence if both occur.
+For audio.com compatibility, `is_listed: true` means public, and
+`is_listed: false` or omitting the field means unlisted. Explicit `visibility`
+takes precedence if both occur. Private sharing is an Audiocity extension;
+audio.com does not offer private audio. This default change does not alter any
+existing recording's sharing setting.
 
 `GET /public/audio/:id` returns metadata only for ready, shared recordings.
 `GET /audio/:id` also lets the authenticated owner read private metadata. Public

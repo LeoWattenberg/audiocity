@@ -16,7 +16,7 @@ Content-Type: application/json
 {"name":"Session","blocks":["BLOCK_HASH_1","BLOCK_HASH_2"]}
 ```
 
-The response is HTTP 201:
+The native response is HTTP 200, matching the live audio.com project endpoint:
 
 ```json
 {
@@ -33,8 +33,8 @@ The response is HTTP 201:
 The example abbreviates project and snapshot metadata. Actual responses supply every mandatory field deserialized by the pinned Audacity DTO: project identity, username, author, slug, name, details, creation/update times, size, head and latest synced ID; snapshots include parent, creation/update/sync times, metadata size and block size. Dates are Unix seconds. Unfinished revisions have `date_synced: 0`.
 
 1. PUT the exact project metadata snapshot to `sync.file.url`. It is Audacity's serialized project snapshot, not an entire `.aup3` SQLite database. POST to its `success` URL after the PUT succeeds. On a definitive failure, POST to its `fail` URL.
-2. Upload each descriptor from `sync.blocks` in the same way. The descriptor's `id` is the requested Audacity block hash, so Audacity can map it back to the local sample block. Upload bytes are Audacity's WavPack block representation.
-3. POST an empty body to `/project/PROJECT_ID/snapshot/SNAPSHOT_ID/sync` once the project metadata and every block have been successfully uploaded and confirmed.
+2. Upload each descriptor from `sync.blocks` in the same way. The descriptor's `id` is the requested Audacity block hash normalized to lowercase, as on audio.com; Audacity maps hashes without case sensitivity. Upload bytes are Audacity's WavPack block representation.
+3. POST an empty body to `/project/PROJECT_ID/snapshot/SNAPSHOT_ID/sync` once the project metadata and every block have been successfully uploaded and confirmed. Native completion returns HTTP 204 without a body. GET the expanded snapshot to retrieve its metadata and download URLs.
 
 The mixdown descriptor exists because Audacity's response parser requires it; a mixdown upload is optional and does not block completion. It is retained as an opaque optional preview, without transcoding.
 
@@ -42,7 +42,7 @@ Completion returns HTTP 409 while required bytes are missing. Repeating successf
 
 GET `/project/PROJECT_ID/snapshot/SNAPSHOT_ID/sync` returns resumable upload descriptors. Its `blocks` array contains only blocks still missing. An already confirmed metadata file has an empty `file.url` (and empty success/failure URLs), which tells Audacity to discard its pending local metadata upload. Failed or expired missing-upload capabilities are renewed. Successfully confirmed data is reused. Upload URLs are expiring bearer capabilities: protect them as credentials.
 
-Audio blocks deduplicate by `(owner, claimed Audacity hash)`, including reuse between that owner's projects. They are never reused across users. Hashes identify the decoded Audacity blocks, not the uploaded WavPack bytes; the server deliberately does not decode native snapshots or verify that a claimed hash represents those decoded samples. Clients must provide consistent hashes. Confirmed uploads are immutable.
+Audio blocks deduplicate by `(owner, claimed Audacity hash)`, ignoring hash case, including reuse between that owner's projects. Existing mixed-case records remain readable and reusable without rewriting their blobs or historical references. They are never reused across users. Hashes identify the decoded Audacity blocks, not the uploaded WavPack bytes; the server deliberately does not decode native snapshots or verify that a claimed hash represents those decoded samples. Clients must provide consistent hashes. Confirmed uploads are immutable.
 
 ## Revisions and concurrency
 
@@ -80,7 +80,7 @@ Content-Type: application/json
 {"name":"Portable project","format":"aup4","size":123456}
 ```
 
-Use `format: "aup3"` for AUP3. Upload the complete, standalone, checkpointed SQLite file to `sync.file.url`, confirm it, and complete `/sync` as above. The optional `size` is the exact upload byte count; when supplied, a mismatch rejects the upload. Archive uploads must begin with SQLite's file header. This check does not certify database integrity, application schema, or semantic compatibility; the server stores opaque files without importing, upgrading or converting them. Supply a complete checkpointed file, not a database requiring external WAL/SHM sidecars.
+Use `format: "aup3"` for AUP3. This is an Audiocity extension, absent from audio.com's API. Archive creation returns HTTP 201; its completion returns HTTP 200 with the expanded snapshot, preserving existing archive clients. Upload the complete, standalone, checkpointed SQLite file to `sync.file.url`, confirm it, and complete `/sync` as above. The optional `size` is the exact upload byte count; when supplied, a mismatch rejects the upload. Archive uploads must begin with SQLite's file header. This check does not certify database integrity, application schema, or semantic compatibility; the server stores opaque files without importing, upgrading or converting them. Supply a complete checkpointed file, not a database requiring external WAL/SHM sidecars.
 
 Whole-file revisions have `transport: "file"`, their selected `format`, and an empty `blocks` array. Revision downloads expose the complete file through `file_url`. Further revisions use `head_snapshot_id` and may explicitly select AUP3 or AUP4 while retaining historical files. Switching an existing project between native block transport and whole-file transport is rejected; create another project instead.
 

@@ -3,7 +3,7 @@ export function escapeHtml(value: string): string {
 }
 
 export function authorizationHtml(flow: string, clientName: string, scope: string, error = ''): string {
-	const access = scope === 'all' ? 'audio uploads, cloud projects, and any administration permitted to your account' : scope.split(' ').map(item => item === 'projects' ? 'cloud projects' : 'audio uploads').join(' and ');
+	const access = scope.split(' ').includes('all') ? 'audio uploads, cloud projects, and any administration permitted to your account' : scope.split(' ').map(item => item === 'projects' ? 'cloud projects' : 'audio uploads').join(' and ');
 	return `<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Link your Audiocity account</title><style>
 body{font:16px/1.5 system-ui,sans-serif;background:#f3f5f8;color:#172536;margin:0;padding:2rem}

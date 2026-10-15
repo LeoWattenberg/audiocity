@@ -32,7 +32,7 @@ try {
 	wav.writeUInt32LE(16, 16); wav.writeUInt16LE(1, 20); wav.writeUInt16LE(1, 22);
 	wav.writeUInt32LE(8000, 24); wav.writeUInt32LE(16000, 28); wav.writeUInt16LE(2, 32); wav.writeUInt16LE(16, 34);
 	wav.write('data', 36); wav.writeUInt32LE(4, 40);
-	const audio = await call<UploadDescriptor & { audio: { id: string } }>('/v1/audio/create', { method: 'POST', body: JSON.stringify({ name: 'Audiocity smoke.wav', mime: 'audio/wav', size: wav.length }) });
+	const audio = await call<UploadDescriptor & { audio: { id: string } }>('/v1/audio/create', { method: 'POST', body: JSON.stringify({ name: 'Audiocity smoke.wav', mime: 'audio/wav', size: wav.length, category: 'recording' }) });
 	created.push({ kind: 'audio', id: audio.audio.id }); await put(audio, wav);
 	const view = await call<{ play: { url: string } }>(`/v1/audio/view?id=${audio.audio.id}`);
 	const range = await fetch(view.play.url, { headers: { Range: 'bytes=0-3' } });
@@ -43,7 +43,8 @@ try {
 	created.push({ kind: 'project', id: project.project.id });
 	await put(project.sync.file, Buffer.from('opaque Audacity serialized metadata fixture'));
 	for (const upload of project.sync.blocks) await put(upload, block);
-	const synced = await call<{ file_url: string }>(`/project/${project.project.id}/snapshot/${project.snapshot.id}/sync`, { method: 'POST' });
+	await call(`/project/${project.project.id}/snapshot/${project.snapshot.id}/sync`, { method: 'POST' });
+	const synced = await call<{ file_url: string }>(`/project/${project.project.id}/snapshot/${project.snapshot.id}?expand=blocks,file_url`);
 	assert.equal(await (await fetch(synced.file_url)).text(), 'opaque Audacity serialized metadata fixture');
 	for (const format of ['aup3', 'aup4']) {
 		const archive = Buffer.concat([Buffer.from('SQLite format 3\0'), Buffer.alloc(100)]);

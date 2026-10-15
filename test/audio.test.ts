@@ -34,7 +34,7 @@ void test('audio upload is private until explicitly shared, stays pending until 
 	const f = await fixture();
 	try {
 		const bytes = wav();
-		const create = await f.app.inject({ method: 'POST', url: '/v1/audio/create', headers: headers(f.token), payload: { mime: 'audio/wav', size: bytes.length, name: 'Recorded rain.wav', category: 'recording' } });
+		const create = await f.app.inject({ method: 'POST', url: '/v1/audio/create', headers: headers(f.token), payload: { mime: 'audio/wav', size: bytes.length, name: 'Recorded rain.wav', category: 'recording', visibility: 'private' } });
 		assert.equal(create.statusCode, 201, create.body);
 		const policy = create.json<AudioPolicy>();
 		assert.equal(policy.audio.title, 'Recorded rain');
@@ -56,7 +56,7 @@ void test('audio ownership holds across view, edit, delete, listing, and source 
 	const f = await fixture();
 	try {
 		const other = await createUser(f.app, f.token);
-		const create = await f.app.inject({ method: 'POST', url: '/v1/audio/create', headers: headers(f.token), payload: { mime: 'audio/wav', size: 48, category: 'other' } });
+		const create = await f.app.inject({ method: 'POST', url: '/v1/audio/create', headers: headers(f.token), payload: { mime: 'audio/wav', size: 48, category: 'other', visibility: 'private' } });
 		const policy = create.json<AudioPolicy>();
 		await upload(f.app, policy, wav(), 'audio/wav');
 		for (const [method, url, payload] of [
