@@ -34,7 +34,30 @@ Native desktop end-to-end validation remains outstanding. Tests in this reposito
 
 ## Soundscaper or another browser editor
 
-No Soundscaper checkout is changed by this repository. Configure or add its service integration to use this server's base URL and OAuth endpoints. A hardcoded audio.com integration needs that client-side change before it can use Audiocity. Add the editor's origin to `AUDIOCITY_CORS_ORIGINS` and recreate the server container.
+Soundscaper's Audiocity-capable audio.com panel uses explicit backend configuration:
+`AUDIOCOM_PROVIDER=audiocity` and `AUDIOCOM_API_ORIGIN` set to this server's origin.
+HTTP loopback development additionally requires `AUDIOCOM_LOCAL_DEVELOPMENT=1`.
+Configure its own OAuth client ID, encryption key, callback and local D1 database
+as described in Soundscaper's `functions/api/audiocom/README.md`. No editor files
+are changed automatically by running Audiocity. Add the editor's origin to
+`AUDIOCITY_CORS_ORIGINS` and recreate the server container when using a separately
+configured instance.
+
+With both checkouts' dependencies installed, the Soundscaper integration worktree
+provides an isolated validation run:
+
+```sh
+cd ../Soundscaper-audio-com
+npm run build
+npx playwright test --config playwright.audiocity.config.mjs
+```
+
+The harness starts temporary Audiocity and Soundscaper Pages/D1 services, registers
+a disposable OAuth client, and cleans up on exit. Set `SCAPE_AUDIOCITY_CHECKOUT`
+when this repository is not the worktree's `../audiocity` sibling. It validates
+real browser OAuth, audio upload/search/playback, and byte-preserving AUP3/AUP4
+archive transfers followed by opening each downloaded file in Soundscaper.
+It does not demonstrate native Audacity desktop compatibility.
 
 Register a public OAuth client once:
 
