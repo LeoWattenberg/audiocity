@@ -2,7 +2,7 @@
 
 Audiocity implements two project transports. Both preserve the submitted bytes, require project-scoped authentication, use the same revision history, and enforce ownership on every metadata route. Native transport is derived from the Audacity source at commit [`b482a5e3ee5443c0a438908aaf1caf09250171a9`](https://github.com/audacity/audacity/tree/b482a5e3ee5443c0a438908aaf1caf09250171a9/au3/libraries/au3-cloud-audiocom), principally `ServiceConfig.cpp`, `sync/CloudSyncDTO.cpp`, `sync/LocalProjectSnapshot.cpp` and `sync/ResumedSnaphotUploadOperation.cpp`.
 
-This is a compatible self-hosted server implementation, not an audio.com service or an agreement with audio.com. Native Audacity end-to-end testing is still required. An unmodified official binary directs its cloud traffic and browser login to audio.com; installing this server alone does not redirect it. Use an Audacity build configured for this server's API, website, callback and OAuth client settings. Soundscaper also needs a client integration configured for this API; this repository does not modify Soundscaper.
+This is a compatible self-hosted server implementation, not an audio.com service or an agreement with audio.com. Native Audacity end-to-end testing is still required. Audacity 3 can select this server through `audacity.cfg`; Audacity 4 currently hardcodes its cloud server and requires a custom build. Follow the [client setup guide](clients.md) to configure the API, website, callback and OAuth client settings. Soundscaper also needs a client integration configured for this API; this repository does not modify Soundscaper.
 
 ## Native Audacity block snapshots
 

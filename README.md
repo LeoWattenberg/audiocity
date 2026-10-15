@@ -10,7 +10,7 @@ Implemented:
 - Complete AUP3/AUP4 file revisions for clients such as Soundscaper, preserving the uploaded SQLite file byte for byte.
 - A small browser console for accounts, uploads, libraries, sharing, and project archive downloads. Actions are available through its menu.
 
-Compatibility is implemented and tested against the observed protocol. Native Audacity desktop end-to-end testing remains outstanding. Clients must be configured to use Audiocity: running the server does not redirect an existing audio.com integration. Whole-file archive storage and Audacity's native block transport are separate, explicitly identified formats. See [client setup](docs/clients.md) and [protocol details](docs/project-protocol.md).
+Compatibility is implemented and tested against the observed protocol. Native Audacity desktop end-to-end testing remains outstanding. Clients must be configured to use Audiocity: [Audacity 3 setup](docs/clients.md#audacity-3-select-your-server-in-audacitycfg) uses `audacity.cfg`; Audacity 4 currently hardcodes its cloud server and requires a custom build, [Soundscaper](https://soundscaper.org) has a preference in Edit→Preferences→Advanced. Whole-file archive storage and Audacity's native block transport are separate, explicitly identified formats. See [client setup](docs/clients.md) and [protocol details](docs/project-protocol.md).
 
 ## Start
 

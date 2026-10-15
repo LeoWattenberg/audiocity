@@ -78,30 +78,17 @@ POST `/auth/token`:
 
 Codes expire after two minutes, are single-use, and are bound to the account, client, exact redirect, granted scope and PKCE challenge. Public clients always require S256 PKCE and cannot use the password grant. This repository implements the server integration points; an editor must configure its API base and OAuth flow to use them.
 
-## Audacity 3 and 4 configuration
+## Audacity authentication compatibility
 
 Compatibility is derived from Audacity source pinned at [`b482a5e3ee5443c0a438908aaf1caf09250171a9`](https://github.com/audacity/audacity/tree/b482a5e3ee5443c0a438908aaf1caf09250171a9), particularly [ServiceConfig.cpp](https://github.com/audacity/audacity/blob/b482a5e3ee5443c0a438908aaf1caf09250171a9/au3/libraries/au3-cloud-audiocom/ServiceConfig.cpp), [OAuthService.cpp](https://github.com/audacity/audacity/blob/b482a5e3ee5443c0a438908aaf1caf09250171a9/au3/libraries/au3-cloud-audiocom/OAuthService.cpp) and [Au3CloudService](https://github.com/audacity/audacity/blob/b482a5e3ee5443c0a438908aaf1caf09250171a9/src/au3cloud/internal/au3cloudservice.cpp). It is covered by protocol tests rather than an automated run of an Audacity desktop binary.
 
-A stock install points at audio.com until its endpoint preferences are changed. With Audacity closed, configure its `CloudServices/AudioCom` preferences using the following values, replacing the example origin and secret with your server configuration. The preferences backend and configuration location depend on the Audacity release and platform.
+Audacity 3 selects its cloud server through `[CloudServices/AudioCom]` in `audacity.cfg`. Follow the [Audacity 3 setup instructions](clients.md#audacity-3-select-your-server-in-audacitycfg) for file locations, a complete configuration example, and account linking. Audacity 4 currently hardcodes its server endpoints and requires a custom build to connect to Audiocity; the Audacity 3 preference-file instructions do not apply to it.
 
-```ini
-[CloudServices/AudioCom]
-ApiEndpoint=http://localhost:8080
-OAuthClientID=audiocity-desktop
-OAuthClientSecret=YOUR_AUDIOCITY_AUDACITY_CLIENT_SECRET
-OAuthRedirectURL=audacity://link
-OAuthLoginPage=http://localhost:8080/auth/authorize?response_type=code&client_id={auth_client_id}&redirect_uri=audacity%3A%2F%2Flink&scope=all
-FrontendURL=http://localhost:8080
-AuthWithRedirectURL=http://localhost:8080/auth/check-and-redirect
-TourPage=http://localhost:8080/
-FinishUploadPage=http://localhost:8080/
-```
-
-Set all of these origin preferences together: Audacity sends its access token to `AuthWithRedirectURL` when opening a browser session. Audiocity validates the token and user, accepts only a destination on its own origin, and hands the browser console its token using a noncached page with a nonce-restricted script. The script immediately removes the token-bearing URL from browser history. The user then chooses “Continue as” the named account before the console session is set, preventing a token-bearing link from silently switching browser accounts.
+Set all of the Audacity 3 origin preferences together: Audacity sends its access token to `AuthWithRedirectURL` when opening a browser session. Audiocity validates the token and user, accepts only a destination on its own origin, and hands the browser console its token using a noncached page with a nonce-restricted script. The script immediately removes the token-bearing URL from browser history. The user then chooses “Continue as” the named account before the console session is set, preventing a token-bearing link from silently switching browser accounts.
 
 The client ID and shared secret must match `AUDIOCITY_AUDACITY_CLIENT_ID` and `AUDIOCITY_AUDACITY_CLIENT_SECRET`. They are Audiocity's own registration, independent of audio.com's registration. Audacity sends them with password, authorization-code and refresh grants. Audacity 3's browser link flow receives `audacity://link?code=...` and exchanges it without PKCE.
 
-The inspected Audacity 4 code also uses these API/client preferences. Its in-app email/password sign-in uses the password grant. Its in-app account creation sends `email`, `password`, `client_id` and `client_secret` to `/auth/register`; when public registration is enabled, Audiocity returns HTTP 200 and the token response expected by that client. Ordinary browser registration retains its HTTP 201 user response.
+Once an Audacity 4 custom build points at this server with matching OAuth client credentials, its inspected in-app email/password sign-in uses the password grant. Its in-app account creation sends `email`, `password`, `client_id` and `client_secret` to `/auth/register`; when public registration is enabled, Audiocity returns HTTP 200 and the token response expected by that client. Ordinary browser registration retains its HTTP 201 user response.
 
 Audacity 4's browser authorization opens `/auth/authorize` with an ephemeral `http://127.0.0.1:PORT/` callback, no scope, and no PKCE challenge. Only the configured Audacity client receives this restricted loopback exception and defaults to `all` scope. The resulting code is still bound to the exact callback string, one-time and short-lived, and its exchange requires the configured client secret. Dynamic clients always use their exact registered redirects and PKCE. Audacity's `authclient` provider parameter is accepted for protocol compatibility; the consent screen authenticates local Audiocity accounts and does not implement Google, Apple or other social identity providers.
 
