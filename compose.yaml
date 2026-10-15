@@ -1,0 +1,30 @@
+services:
+  audiocity:
+    build: .
+    image: audiocity:local
+    ports:
+      - "${AUDIOCITY_BIND_ADDRESS:-127.0.0.1}:${AUDIOCITY_PORT:-8080}:8080"
+    environment:
+      AUDIOCITY_PUBLIC_URL: ${AUDIOCITY_PUBLIC_URL:-http://localhost:8080}
+      AUDIOCITY_ADMIN_EMAIL: ${AUDIOCITY_ADMIN_EMAIL:-admin@audiocity.local}
+      AUDIOCITY_ADMIN_PASSWORD: ${AUDIOCITY_ADMIN_PASSWORD:-}
+      AUDIOCITY_CORS_ORIGINS: ${AUDIOCITY_CORS_ORIGINS:-http://localhost:8080}
+      AUDIOCITY_REGISTRATION: ${AUDIOCITY_REGISTRATION:-false}
+      AUDIOCITY_MAX_UPLOAD_BYTES: ${AUDIOCITY_MAX_UPLOAD_BYTES:-1073741824}
+      AUDIOCITY_MAX_USER_BYTES: ${AUDIOCITY_MAX_USER_BYTES:-21474836480}
+      AUDIOCITY_AUDACITY_CLIENT_ID: ${AUDIOCITY_AUDACITY_CLIENT_ID:-audiocity-desktop}
+      AUDIOCITY_AUDACITY_CLIENT_SECRET: ${AUDIOCITY_AUDACITY_CLIENT_SECRET:-audiocity-local-desktop}
+    volumes:
+      - audiocity-data:/data
+    restart: unless-stopped
+    init: true
+    read_only: true
+    tmpfs:
+      - /tmp:size=64m,mode=1777
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    stop_grace_period: 35s
+volumes:
+  audiocity-data:

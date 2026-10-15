@@ -1,0 +1,91 @@
+# Project synchronization protocol
+
+Audiocity implements two project transports. Both preserve the submitted bytes, require project-scoped authentication, use the same revision history, and enforce ownership on every metadata route. Native transport is derived from the Audacity source at commit [`b482a5e3ee5443c0a438908aaf1caf09250171a9`](https://github.com/audacity/audacity/tree/b482a5e3ee5443c0a438908aaf1caf09250171a9/au3/libraries/au3-cloud-audiocom), principally `ServiceConfig.cpp`, `sync/CloudSyncDTO.cpp`, `sync/LocalProjectSnapshot.cpp` and `sync/ResumedSnaphotUploadOperation.cpp`.
+
+This is a compatible self-hosted server implementation, not an audio.com service or an agreement with audio.com. Native Audacity end-to-end testing is still required. An unmodified official binary directs its cloud traffic and browser login to audio.com; installing this server alone does not redirect it. Use an Audacity build configured for this server's API, website, callback and OAuth client settings. Soundscaper also needs a client integration configured for this API; this repository does not modify Soundscaper.
+
+## Native Audacity block snapshots
+
+Create a project and its first pending revision:
+
+```http
+POST /project
+Authorization: Bearer TOKEN
+Content-Type: application/json
+
+{"name":"Session","blocks":["BLOCK_HASH_1","BLOCK_HASH_2"]}
+```
+
+The response is HTTP 201:
+
+```json
+{
+  "project": {"id":"PROJECT_ID","head":{"id":"SNAPSHOT_ID"}},
+  "snapshot": {"id":"SNAPSHOT_ID","parent_id":"","date_synced":0},
+  "sync": {
+    "file":{"id":"BLOB_ID","url":"PUT_URL","success":"SUCCESS_URL","fail":"FAIL_URL"},
+    "mixdown":{"id":"BLOB_ID","url":"PUT_URL","success":"SUCCESS_URL","fail":"FAIL_URL"},
+    "blocks":[{"id":"BLOCK_HASH_1","url":"PUT_URL","success":"SUCCESS_URL","fail":"FAIL_URL"}]
+  }
+}
+```
+
+The example abbreviates project and snapshot metadata. Actual responses supply every mandatory field deserialized by the pinned Audacity DTO: project identity, username, author, slug, name, details, creation/update times, size, head and latest synced ID; snapshots include parent, creation/update/sync times, metadata size and block size. Dates are Unix seconds. Unfinished revisions have `date_synced: 0`.
+
+1. PUT the exact project metadata snapshot to `sync.file.url`. It is Audacity's serialized project snapshot, not an entire `.aup3` SQLite database. POST to its `success` URL after the PUT succeeds. On a definitive failure, POST to its `fail` URL.
+2. Upload each descriptor from `sync.blocks` in the same way. The descriptor's `id` is the requested Audacity block hash, so Audacity can map it back to the local sample block. Upload bytes are Audacity's WavPack block representation.
+3. POST an empty body to `/project/PROJECT_ID/snapshot/SNAPSHOT_ID/sync` once the project metadata and every block have been successfully uploaded and confirmed.
+
+The mixdown descriptor exists because Audacity's response parser requires it; a mixdown upload is optional and does not block completion. It is retained as an opaque optional preview, without transcoding.
+
+Completion returns HTTP 409 while required bytes are missing. Repeating successful completion returns the same revision without moving the project head backwards. A newer pending head prevents an older unfinished revision from completing. Already synchronized revisions remain readable in history.
+
+GET `/project/PROJECT_ID/snapshot/SNAPSHOT_ID/sync` returns resumable upload descriptors. Its `blocks` array contains only blocks still missing. An already confirmed metadata file has an empty `file.url` (and empty success/failure URLs), which tells Audacity to discard its pending local metadata upload. Failed or expired missing-upload capabilities are renewed. Successfully confirmed data is reused. Upload URLs are expiring bearer capabilities: protect them as credentials.
+
+Audio blocks deduplicate by `(owner, claimed Audacity hash)`, including reuse between that owner's projects. They are never reused across users. Hashes identify the decoded Audacity blocks, not the uploaded WavPack bytes; the server deliberately does not decode native snapshots or verify that a claimed hash represents those decoded samples. Clients must provide consistent hashes. Confirmed uploads are immutable.
+
+## Revisions and concurrency
+
+Create another revision with:
+
+```http
+POST /project/PROJECT_ID/snapshot
+Authorization: Bearer TOKEN
+Content-Type: application/json
+
+{"head_snapshot_id":"CURRENT_HEAD","blocks":["BLOCK_HASH_1","NEW_HASH"]}
+```
+
+Only missing blocks receive upload descriptors. Metadata snapshots always receive a fresh descriptor. A stale head returns HTTP 409, which the pinned Audacity client recognizes as a project version conflict. `force: true` explicitly permits a branch from a known earlier snapshot. It creates a new revision and preserves other revisions; it does not overwrite historical bytes. An unknown or foreign parent ID is rejected even with force enabled.
+
+- GET `/project` lists the user's native block projects. It accepts `page`, `per-page` (1–100), and `q`. Pagination contains Audacity's required `total`, `pages`, `page` and `size` fields.
+- GET `/project/PROJECT_ID` returns project metadata and its latest head.
+- PATCH `/project/PROJECT_ID` changes `name` or `details`.
+- GET `/project/PROJECT_ID/snapshot` lists revisions, including pending ones, with the same pagination.
+- GET `/project/PROJECT_ID/snapshot/SNAPSHOT_ID?expand=blocks,file_url` returns snapshot metadata and signed download URLs for confirmed metadata and blocks. Downloads preserve the original bytes.
+- DELETE `/project/PROJECT_ID/snapshot/SNAPSHOT_ID` removes an abandoned revision. A current synchronized revision or ancestor of another revision cannot be removed. Removing a pending head restores its predecessor.
+- DELETE `/project/PROJECT_ID` removes the complete project history and its blobs. Blocks still referenced by the same owner's other projects remain available.
+
+The head may be pending. `latest_synced_snapshot_id` identifies the latest completed revision suitable for download. Clients should retain local work until completion succeeds.
+
+## Soundscaper whole-file AUP3 and AUP4 transport
+
+Select whole-file transport explicitly when creating a project:
+
+```http
+POST /project
+Authorization: Bearer TOKEN
+Content-Type: application/json
+
+{"name":"Portable project","format":"aup4","size":123456}
+```
+
+Use `format: "aup3"` for AUP3. Upload the complete, standalone, checkpointed SQLite file to `sync.file.url`, confirm it, and complete `/sync` as above. The optional `size` is the exact upload byte count; when supplied, a mismatch rejects the upload. Archive uploads must begin with SQLite's file header. This check does not certify database integrity, application schema, or semantic compatibility; the server stores opaque files without importing, upgrading or converting them. Supply a complete checkpointed file, not a database requiring external WAL/SHM sidecars.
+
+Whole-file revisions have `transport: "file"`, their selected `format`, and an empty `blocks` array. Revision downloads expose the complete file through `file_url`. Further revisions use `head_snapshot_id` and may explicitly select AUP3 or AUP4 while retaining historical files. Switching an existing project between native block transport and whole-file transport is rejected; create another project instead.
+
+GET `/project?transport=all` includes both transports. GET `/project?transport=file` includes only whole-file projects; `?format=aup3` or `?format=aup4` filters precisely. Native `/project` defaults to block projects because native Audacity cannot reconstruct its cloud snapshot from a whole SQLite archive. A client must use the declared transport when opening a project.
+
+## Deliberate limits
+
+Audiocity does not transcode, reconstruct `.aup3`/`.aup4` databases from native block snapshots, convert between Audacity generations, or publish public project sharing. There is no background merge or conflict resolution. The two transports provide persistent versioned storage through explicit upload and download protocols; an editor remains responsible for decoding and editing its supported formats.
