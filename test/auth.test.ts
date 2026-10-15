@@ -352,3 +352,38 @@ void test('Audacity browser handoff validates token ownership and only redirects
 		assert.equal((await f.app.inject(`/auth/check-and-redirect?${params}`)).statusCode, 401);
 	} finally { await f.close(); }
 });
+
+void test('OAuth form CSP admits only the validated callback source and preserves it after invalid credentials', async () => {
+	const f = await fixture();
+	try {
+		const client = await registerClient(f, 'http://127.0.0.1:4325/api/audiocom/oauth/callback?panel=audio');
+		const query = new URLSearchParams({ response_type: 'code', client_id: client.id, redirect_uri: client.redirect, scope: 'public projects', code_challenge: 'a'.repeat(43), code_challenge_method: 'S256' });
+		const page = await f.app.inject(`/auth/authorize?${query}`);
+		const expected = "form-action 'self' http://127.0.0.1:4325/api/audiocom/oauth/callback;";
+		assert.ok(String(page.headers['content-security-policy']).includes(expected));
+		assert.ok(!String(page.headers['content-security-policy']).includes('?panel'));
+		const flow = page.body.match(/name="flow" value="([^"]+)"/)?.[1];
+		const cookie = String(page.headers['set-cookie']).split(';')[0];
+		const rejected = await f.app.inject({ method: 'POST', url: '/auth/authorize', headers: { cookie }, payload: { flow, username: f.config.adminEmail, password: 'incorrect-password', consent: 'allow' } });
+		assert.equal(rejected.statusCode, 401);
+		assert.ok(String(rejected.headers['content-security-policy']).includes(expected));
+	} finally { await f.close(); }
+});
+
+void test('OAuth form CSP cannot acquire directives or wildcard hosts from a registered callback URI', async () => {
+	const f = await fixture();
+	try {
+		for (const redirect of ['https://editor.example/callback;script-src%20*', 'https://*.example/callback', 'https://editor;script-src.test/callback']) {
+			const client = await registerClient(f, redirect);
+			const query = new URLSearchParams({ response_type: 'code', client_id: client.id, redirect_uri: redirect, code_challenge: 'a'.repeat(43), code_challenge_method: 'S256' });
+			const page = await f.app.inject(`/auth/authorize?${query}`);
+			assert.equal(page.statusCode, 200);
+			const policy = String(page.headers['content-security-policy']);
+			assert.ok(!policy.includes('*'));
+			assert.equal(policy.split(';').length, 5);
+			assert.ok(!policy.includes(';script-src'));
+		}
+		const legacy = await f.app.inject(`/auth/authorize?${new URLSearchParams({ response_type: 'code', client_id: f.config.audacityClientId, redirect_uri: 'audacity://link', scope: 'all' })}`);
+		assert.ok(String(legacy.headers['content-security-policy']).includes("form-action 'self' audacity://link;"));
+	} finally { await f.close(); }
+});

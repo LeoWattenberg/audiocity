@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { FastifyInstance } from 'fastify';
 import { createApp } from '../../src/app.ts';
+import { Authentication } from '../../src/auth.ts';
 
 const port = Number(process.env.PLAYWRIGHT_PORT ?? 4328);
 if (!Number.isSafeInteger(port) || port < 1 || port > 65535) throw new Error('PLAYWRIGHT_PORT must be between 1 and 65535.');
@@ -25,10 +26,13 @@ function stop(): void {
 process.once('SIGINT', stop);
 process.once('SIGTERM', stop);
 try {
-	({ app } = await createApp({
+	const fixture = await createApp({
 		dataDir: directory, logger: false, publicUrl: `http://127.0.0.1:${port}`, port,
 		adminEmail: 'browser@example.test', adminPassword: 'browser-admin-password',
-	}));
+	});
+	app = fixture.app;
+	if (!(fixture.ctx.auth instanceof Authentication)) throw new Error('The browser fixture requires local authentication.');
+	await fixture.ctx.auth.createUser({ email: 'oauth-browser@example.test', password: 'oauth-browser-password' });
 	await app.listen({ port, host: '127.0.0.1' });
 } catch (error) {
 	await cleanup();

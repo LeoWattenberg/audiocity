@@ -109,11 +109,17 @@ export class OAuthAuthorization {
 		this.auth.db.run('INSERT INTO oauth_flows VALUES (?, ?, ?, ?, ?, ?, ?, ?)', digest(flow), digest(cookie), client.id, redirect, scope, state, challenge, now() + 600);
 		const secure = this.auth.config.publicUrl.startsWith('https:') ? '; Secure' : '';
 		reply.header('Set-Cookie', `audiocity_oauth=${cookie}; Path=/auth/authorize; HttpOnly; SameSite=Strict; Max-Age=600${secure}`);
-		return this.html(reply, authorizationHtml(flow, client.name, scope));
+		return this.html(reply, authorizationHtml(flow, client.name, scope), redirect);
 	}
-	private html(reply: FastifyReply, html: string) {
+	private html(reply: FastifyReply, html: string, redirect: string) {
+		const target = new URL(redirect);
+		// Registered callbacks are validated above. Escape CSP delimiters and wildcards
+		// rather than embedding a caller-controlled URL as policy syntax. Queries do
+		// not form part of CSP path matching; OAuth still enforces the exact URI.
+		const source = `${target.protocol}//${target.host}${target.pathname}`.replaceAll(/[^A-Za-z0-9.:/[\]_%~-]/gu,
+			character => `%${character.codePointAt(0)!.toString(16).padStart(2, '0').toUpperCase()}`);
 		return reply.header('Cache-Control', 'no-store').header('Referrer-Policy', 'no-referrer')
-			.header('Content-Security-Policy', "default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'")
+			.header('Content-Security-Policy', `default-src 'none'; style-src 'unsafe-inline'; form-action 'self' ${source}; frame-ancestors 'none'; base-uri 'none'`)
 			.type('text/html; charset=utf-8').send(html);
 	}
 	private async finish(request: FastifyRequest, reply: FastifyReply) {
@@ -131,7 +137,7 @@ export class OAuthAuthorization {
 		catch (error) {
 			if (!(error instanceof ApiError) || error.statusCode !== 401) throw error;
 			const client = this.auth.authorizationClient(flow.client_id);
-			return this.html(reply.code(401), authorizationHtml(flowId, client.name, flow.scope, 'Invalid email or password.'));
+			return this.html(reply.code(401), authorizationHtml(flowId, client.name, flow.scope, 'Invalid email or password.'), flow.redirect_uri);
 		}
 		const code = secret();
 		this.auth.db.transaction(() => {
