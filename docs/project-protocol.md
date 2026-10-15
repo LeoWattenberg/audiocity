@@ -66,7 +66,7 @@ Only missing blocks receive upload descriptors. Metadata snapshots always receiv
 - DELETE `/project/PROJECT_ID/snapshot/SNAPSHOT_ID` removes an abandoned revision. A current synchronized revision or ancestor of another revision cannot be removed. Removing a pending head restores its predecessor.
 - DELETE `/project/PROJECT_ID` removes the complete project history and its blobs. Blocks still referenced by the same owner's other projects remain available.
 
-The head may be pending. `latest_synced_snapshot_id` identifies the latest completed revision suitable for download. Clients should retain local work until completion succeeds.
+The head may be pending. `latest_synced_snapshot_id` identifies the latest completed revision suitable for download, and `latest_synced_format` identifies that revision's format (empty before any revision completes). The top-level `format` describes the head, which may select a different archive generation from the last completed revision. Clients should retain local work until completion succeeds.
 
 ## Soundscaper whole-file AUP3 and AUP4 transport
 

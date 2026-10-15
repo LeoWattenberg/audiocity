@@ -31,6 +31,7 @@ export function projectInfo(ctx: Context, project: ProjectRow) {
 		size: info ? info.file_size + info.blocks_size : 0,
 		head: head ? snapshotInfo(ctx, head) : null,
 		latest_synced_snapshot_id: project.synced_id,
+		latest_synced_format: synced?.format ?? '',
 		format: head?.format ?? 'audacity', transport: head?.format === 'audacity' ? 'blocks' : 'file',
 	};
 }
