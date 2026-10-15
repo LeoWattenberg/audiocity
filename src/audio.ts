@@ -162,6 +162,33 @@ export function registerAudioRoutes(app: FastifyInstance, ctx: Context): void {
 
 	for (const url of ['/v1/audio/create', '/audio']) app.post(url, async (request, reply) => reply.code(201).send(await create(request)));
 
+	app.get('/v1/search', { config: { rateLimit: {
+		max: 60, timeWindow: '1 minute', keyGenerator: request => owner(request).id,
+	} } }, request => {
+		owner(request);
+		const query = objectBody(request.query);
+		const search = query.query ?? '';
+		const types = query.types ?? '';
+		const pageValue = query.page ?? '1';
+		if (typeof search !== 'string' || search.length > 256 || typeof types !== 'string'
+			|| typeof pageValue !== 'string' || !/^[1-9]\d{0,5}$/.test(pageValue)
+			|| (types && types.split(',').some(type => !['audio', 'author', 'collection'].includes(type)))) {
+			throw new ApiError(422, 'Supply a query of at most 256 characters, valid result types and a positive page.', 'ValidationError');
+		}
+		if (types && !types.split(',').includes('audio')) return [];
+		const term = search.trim();
+		const pattern = `%${term.replace(/[\\%_]/g, '\\$&')}%`;
+		const matching = term.startsWith('#')
+			? 'EXISTS (SELECT 1 FROM json_each(audio.tags) WHERE value=? COLLATE NOCASE)'
+			: `(audio.title LIKE ? ESCAPE '\\' OR audio.description LIKE ? ESCAPE '\\' OR users.name LIKE ? ESCAPE '\\'
+				OR EXISTS (SELECT 1 FROM json_each(audio.tags) WHERE value LIKE ? ESCAPE '\\'))`;
+		const params = term.startsWith('#') ? [term.slice(1)] : [pattern, pattern, pattern, pattern];
+		const rows = ctx.db.all<AudioRecord>(`SELECT audio.* FROM audio JOIN users ON users.id=audio.owner_id
+			WHERE audio.visibility='public' AND audio.blob_id IN (SELECT id FROM blobs WHERE state='ready') AND ${matching}
+			ORDER BY audio.created DESC,audio.rowid DESC LIMIT 10 OFFSET ?`, ...params, (Number(pageValue) - 1) * 10);
+		return rows.map(row => ({ type: 'audio', model: metadata(row) }));
+	});
+
 	function list(request: FastifyRequest, legacy: boolean) {
 		const user = owner(request);
 		const query = objectBody(request.query);

@@ -3,7 +3,7 @@ import { ApiError } from './core.ts';
 
 const formats = new Map<string, string>([
 	...['audio/wav', 'audio/vnd.wave', 'audio/wave', 'audio/x-wav'].map(mime => [mime, 'wav'] as const),
-	...['audio/mpeg', 'audio/MPA', 'audio/mpa-robust'].map(mime => [mime, 'mp3'] as const),
+	...['audio/mpeg', 'audio/mpa', 'audio/mpa-robust'].map(mime => [mime, 'mp3'] as const),
 	...['audio/flac', 'audio/x-flac'].map(mime => [mime, 'flac'] as const),
 	...['audio/x-wavpack', 'audio/x-wavpack-correction'].map(mime => [mime, 'wv'] as const),
 	...['audio/aiff', 'audio/x-aiff'].map(mime => [mime, 'aiff'] as const),
@@ -12,7 +12,7 @@ const formats = new Map<string, string>([
 ]);
 
 export function audioFormat(mime: string): string {
-	const format = formats.get(mime);
+	const format = formats.get(mime.toLowerCase());
 	if (!format) throw new ApiError(422, 'Unsupported audio MIME type.', 'ValidationError');
 	return format;
 }

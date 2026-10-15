@@ -57,6 +57,23 @@ strings of at most 64 characters. Slugs use lowercase letters, digits and hyphen
 and are unique within one user's library. Automatic slugs receive numeric suffixes
 when needed. Categories and licenses follow the audio.com public API enumeration.
 
+## Search public recordings
+
+`GET /v1/search?query=rain&types=audio&page=1` requires a bearer token with audio
+access and returns an array of `{ "type": "audio", "model": AUDIO_METADATA }`
+objects. It searches ready, public recordings across all accounts. Private,
+unlisted, pending and cancelled recordings never appear, including the caller's
+own recordings. Use `/v1/audio/list` for the owner's complete library.
+
+Queries match literal substrings in titles, descriptions, tags and display names,
+with SQLite's case-insensitive matching for ASCII characters. A query beginning
+with `#` matches an exact tag. Empty queries browse all public recordings. Results
+are newest first in fixed pages of ten; `page` is between 1 and 999999 and `query`
+is at most 256 characters. Search is limited to 60 requests per minute per account.
+The `types` filter accepts audio.com's `audio`, `author` and `collection` names,
+comma-separated; this server only implements audio results. Unlike audio.com,
+it does not rank results by relevance or return author and collection results.
+
 ## Sharing
 
 New uploads default to `visibility: "private"`. The owner must explicitly opt into

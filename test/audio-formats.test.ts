@@ -13,6 +13,8 @@ void test('supported audio container signatures and aliases preserve original fo
 			['audio/flac', 'flac', 'fLaC', 0, 4],
 			['audio/mpeg', 'mp3', 'ID3', 0, 3],
 			['audio/MPA', 'mp3', 'ID3', 0, 3],
+			['audio/mpa', 'mp3', 'ID3', 0, 3],
+			['Audio/MPEG', 'mp3', 'ID3', 0, 3],
 			['audio/x-wavpack', 'wv', 'wvpk', 0, 32],
 			['audio/ogg', 'ogg', 'OggS', 0, 27],
 			['application/ogg', 'ogg', 'OggS', 0, 27],
