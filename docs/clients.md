@@ -34,14 +34,21 @@ Native desktop end-to-end validation remains outstanding. Tests in this reposito
 
 ## Soundscaper or another browser editor
 
-Soundscaper's Audiocity-capable audio.com panel uses explicit backend configuration:
-`AUDIOCOM_PROVIDER=audiocity` and `AUDIOCOM_API_ORIGIN` set to this server's origin.
-HTTP loopback development additionally requires `AUDIOCOM_LOCAL_DEVELOPMENT=1`.
-Configure its own OAuth client ID, encryption key, callback and local D1 database
-as described in Soundscaper's `functions/api/audiocom/README.md`. No editor files
-are changed automatically by running Audiocity. Add the editor's origin to
-`AUDIOCITY_CORS_ORIGINS` and recreate the server container when using a separately
-configured instance.
+Soundscaper uses audio.com by default. In Preferences → Advanced, under audio.com
+API, set Server URL to this server's HTTPS origin and choose Save server. Then open
+Window → audio.com and connect with your Audiocity account. Changing the server
+signs out the old connection; Use audio.com restores the default. Soundscaper
+registers its own public OAuth client with the selected server and uses PKCE.
+No server deployment setting or shared OAuth client credential is needed to
+switch an individual editor's backend.
+
+The selected origin must be reachable from Soundscaper's API deployment. HTTP
+loopback is supported only for local development; a remote Pages deployment
+cannot reach a server on your laptop's localhost. Audiocity's
+`AUDIOCITY_PUBLIC_URL` must match its reachable origin so registration, browser
+consent and capability URLs remain on the same server. Other clients making
+direct browser API requests must additionally be listed in
+`AUDIOCITY_CORS_ORIGINS`.
 
 With both checkouts' dependencies installed, the Soundscaper integration worktree
 provides an isolated validation run:
@@ -72,8 +79,9 @@ Use the returned `client_id`. Authorization uses code flow with PKCE S256; retai
 
 - Scope `public` permits regular audio operations.
 - Scope `projects` permits project upload/list/sync/download.
-- Scope `public projects` grants both without administrator APIs; prefer this for third-party editors.
+- Scope `public projects` is Audiocity's explicit extension granting both regular audio and local project storage without administrator APIs; Soundscaper requests it after recognizing the server's archive capabilities.
 - Scope `all` is required by the native Audacity compatibility flow and also grants the user's administrative capabilities when that user is an administrator.
+- Combining `public all` confines native routes to the public API, matching audio.com; request `all` alone for native synchronization.
 
 Audio upload and library APIs are documented in [audio-api.md](audio-api.md). For complete editor project files, create a project with `format: "aup3"` or `format: "aup4"`, upload the standalone checkpointed SQLite export, and complete the revision as described in [project-protocol.md](project-protocol.md). List with `/project?transport=all` or a format filter. Download the signed `file_url` and pass the bytes to the editor's supported project importer.
 
