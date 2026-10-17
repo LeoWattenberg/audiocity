@@ -31,11 +31,19 @@ for (const flow of ['manual token', 'password']) {
 		expect(user.username).toBeTruthy();
 		expect(user.avatar).toBe('');
 		expect(user.profile.name).toBe('oauth-browser');
-		const destination = `/${user.username}/audio/audacity-upload/edit?mtm_campaign=Audacity&mtm_source=Audacity-3.7.9&mtm_content=Share_Audio_Menu`;
+		const wav = Buffer.alloc(48);
+		wav.write('RIFF'); wav.writeUInt32LE(40, 4); wav.write('WAVEfmt ', 8); wav.writeUInt32LE(16, 16); wav.writeUInt16LE(1, 20); wav.writeUInt16LE(1, 22); wav.writeUInt32LE(8000, 24); wav.writeUInt32LE(16000, 28); wav.writeUInt16LE(2, 32); wav.writeUInt16LE(16, 34); wav.write('data', 36); wav.writeUInt32LE(4, 40);
+		const headers = { authorization: `Bearer ${tokens.access_token}` };
+		const created = await request.post('/audio', { headers, data: { name: `Audacity ${flow}.wav`, mime: 'audio/wav', size: wav.length, category: 'recording', visibility: 'private' } });
+		expect(created.status()).toBe(201);
+		const policy = await created.json() as { url: string; success: string; audio: { id: string; slug: string; title: string } };
+		expect((await request.put(policy.url, { headers: { 'content-type': 'application/octet-stream' }, data: wav })).status()).toBe(200);
+		expect((await request.post(policy.success)).status()).toBe(200);
+		const destination = `/${user.username}/audio/${policy.audio.slug}/edit?mtm_campaign=Audacity&mtm_source=Audacity-3.7.9&mtm_content=Share_Audio_Menu`;
 		const handoff = await page.goto(`/auth/check-and-redirect?${new URLSearchParams({ token: tokens.access_token, user: user.id, url: destination })}`);
 		expect(handoff?.status()).toBe(200);
-		await expect(page).toHaveURL(`${baseURL!}/?view=audio`);
-		await expect(page.getByRole('heading', { name: 'Audio library', exact: true })).toBeVisible();
+		await expect(page).toHaveURL(`${baseURL!}/audio/${policy.audio.id}/edit`);
+		await expect(page.getByRole('heading', { name: `Edit: ${policy.audio.title}`, exact: true })).toBeVisible();
 		await expect(page.getByText('Signed in as oauth-browser (oauth-browser@example.test)', { exact: true })).toBeVisible();
 		expect(await page.evaluate(() => sessionStorage.getItem('audiocity.access-token'))).toBe(tokens.access_token);
 		const logout = await request.post('/auth/logout', { headers: { Authorization: `${tokens.token_type} ${tokens.access_token}` } });
@@ -70,7 +78,7 @@ test('Audacity saved project browser links open the project library with or with
 			const handoff = await page.goto(`/auth/check-and-redirect?${new URLSearchParams({ token, user: user.id, url: path + tracking })}`);
 			expect(handoff?.status()).toBe(200);
 			await expect(page).toHaveURL(`${baseURL!}/?view=projects`);
-			await expect(page.getByRole('heading', { name: 'Project library', exact: true })).toBeVisible();
+			await expect(page.getByRole('heading', { name: 'Library', exact: true })).toBeVisible();
 			await expect(page.getByRole('heading', { name: 'Project browser handoff', exact: true })).toBeVisible();
 			expect(await page.evaluate(() => sessionStorage.getItem('audiocity.access-token'))).toBe(token);
 		}
