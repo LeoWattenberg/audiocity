@@ -1,0 +1,46 @@
+{
+  "wavpack": {
+    "repository": "https://github.com/dbry/WavPack",
+    "version": "5.9.0",
+    "revision": "5803634a030e2a11dba602ba057b89cc34486c67",
+    "license": "BSD-3-Clause"
+  },
+  "toolchain": {
+    "image": "emscripten/emsdk:3.1.64@sha256:8847dad4171ebc8a53d9ae5cda86a2546ef5b2e68834c14dc1ba2b2962e125cc",
+    "sourceDateEpoch": "1768696955"
+  },
+  "sources": {
+    "native/audiocity_decode.c": "0397f04061b618e70f957247602432aa97b64466c7a6e9b1069e2ee986a2ddb2",
+    "native/common_utils.c": "cebbeaddba2982100d4cbc8bba53fa623189dac90f7342196bff9e74c5631a38",
+    "native/decorr_utils.c": "3dc93ee065ed9459dfc534614112dcf420c0aa59d222b743157128f4df166110",
+    "native/entropy_utils.c": "3d750a714829230d09a09701943c40ac10d8d3a8e4145fe9ca353205a18320d1",
+    "native/open_utils.c": "d1d198ba6d0b6efd11745856dd8a988bf770bccf659ca6aaea557a110c6acaee",
+    "native/read_words.c": "f35764aebeb8f0a304b453b4a86b4193093551f629f9c5cc8dcb4f444ff6cc1b",
+    "native/unpack.c": "bba495a5c33f432d8acd82a36a52d79d0d2ff7d05a1a5bc6e110ab7a92a9391c",
+    "native/unpack_floats.c": "d4b7c9664d43bc284909835cf38e0a70c3a518f7eb10dc4f92e78d559505b3d1",
+    "native/unpack_utils.c": "5e5487d7d97f33334f5b3e5ce719ce06dcec01ee9a08e08e3b7adacd2730190f",
+    "native/wavpack.h": "3c61d65511e258c5dc120a6daaee626d6a1051f3254ca9b67ac654a8f6212a97",
+    "native/wavpack_local.h": "51e187bb5ddb91723808a37c570e661b258e99947dd986481163a27d8f12fd01",
+    "native/wavpack_version.h": "bfc6435383f32d4ce39d28dd82f17e823e4df63d392b0e7c2b069b3ddfbd5874",
+    "licenses/COMPILER_RT.txt": "1a8f1058753f1ba890de984e48f0242a3a5c29a6a8f2ed9fd813f36985387e8d",
+    "licenses/EMSCRIPTEN.txt": "620a78084fc7ca97c0b5dea9abf891f3ffcadfdbf305276f099c9c4e12fc1d86",
+    "licenses/MUSL.txt": "f9bc4423732350eb0b3f7ed7e91d530298476f8fec0c6c427a1c04ade22655af",
+    "licenses/WAVPACK.txt": "1703dd391c9b422910287add8483a27d9bead0b0b5ccd6d5017e995a7192b3e2"
+  },
+  "compiledSources": [
+    "audiocity_decode.c",
+    "common_utils.c",
+    "decorr_utils.c",
+    "entropy_utils.c",
+    "open_utils.c",
+    "read_words.c",
+    "unpack.c",
+    "unpack_floats.c",
+    "unpack_utils.c"
+  ],
+  "wasm": {
+    "sha256": "af9c9f6aaf3796af89d7ac4d51dc018b850fd7f06f031e6f4cfa2701a4f57307",
+    "initialMemoryBytes": 8388608,
+    "maximumMemoryBytes": 134217728
+  }
+}

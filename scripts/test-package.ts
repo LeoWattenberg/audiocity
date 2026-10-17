@@ -45,6 +45,24 @@ try {
 	const source = await fetch(`${url}/source.tar.gz`);
 	assert.equal(source.status, 200);
 	assert.deepEqual(Buffer.from(await source.arrayBuffer()), readFileSync(join(root, 'dist/source.tar.gz')));
+	for (const [path, type] of [
+		['/playback.js', 'text/javascript'], ['/assets/wavpack/worker.js', 'text/javascript'],
+		['/assets/wavpack/decode.js', 'text/javascript'], ['/assets/wavpack/wavpack.wasm', 'application/wasm'],
+		['/assets/wavpack/native/audiocity_decode.c', 'text/plain'], ['/assets/wavpack/NOTICE.md', 'text/plain'],
+		['/assets/wavpack/licenses/WAVPACK.txt', 'text/plain'],
+	] as const) {
+		const asset = await fetch(`${url}${path}`);
+		assert.equal(asset.status, 200, `Packaged codec asset: ${path}`);
+		assert.ok(asset.headers.get('content-type')?.startsWith(type));
+		if (path.endsWith('.wasm')) {
+			assert.deepEqual(Buffer.from(await asset.arrayBuffer()), readFileSync(join(root, 'assets/wavpack/wavpack.wasm')));
+		} else assert.ok((await asset.text()).length > 0);
+	}
+	const sourceInventory = execFileSync('tar', ['-tzf', join(root, 'dist/source.tar.gz')], { encoding: 'utf8' });
+	for (const path of ['assets/wavpack/native/audiocity_decode.c', 'assets/wavpack/native/unpack.c',
+		'assets/wavpack/source-manifest.json', 'assets/wavpack/licenses/WAVPACK.txt', 'scripts/build-wavpack-wasm.ts']) {
+		assert.ok(sourceInventory.split('\n').includes(path), `Corresponding source includes ${path}`);
+	}
 	execFileSync(process.execPath, ['scripts/smoke.ts'], { cwd: root, env, stdio: 'inherit' });
 	process.stdout.write('Compiled Node.js package passed with production dependencies and corresponding source.\n');
 } finally {

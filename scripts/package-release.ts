@@ -35,8 +35,8 @@ try {
 		for (const name of ['package-lock.json', '.npmrc', '.nvmrc', '.env.example', 'LICENSE', 'NOTICE.md', 'docs']) copy(name, directory);
 		mkdirSync(join(directory, 'dist'));
 		for (const name of readdirSync(join(root, 'dist'))) {
-			if (name.endsWith('.js') || name.endsWith('.js.map') || name === 'source.tar.gz') {
-				cpSync(join(root, 'dist', name), join(directory, 'dist', name));
+			if (name.endsWith('.js') || name.endsWith('.js.map') || name === 'source.tar.gz' || name === 'assets') {
+				cpSync(join(root, 'dist', name), join(directory, 'dist', name), { recursive: true });
 			}
 		}
 		writeFileSync(join(directory, 'package.json'), `${JSON.stringify({ ...manifest, scripts: { start: 'node dist/main.js' } }, null, 2)}\n`);

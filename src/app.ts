@@ -13,6 +13,7 @@ import type { Config, Context } from './core.ts';
 import { Database } from './database.ts';
 import { registerConsoleRoutes } from './console.ts';
 import { registerProjectRoutes } from './projects.ts';
+import { registerPlaybackAssets } from './playback-assets.ts';
 
 export async function createApp(overrides: Partial<Config> = {}) {
 	const config = { ...readConfig(), ...overrides };
@@ -66,13 +67,14 @@ export async function createApp(overrides: Partial<Config> = {}) {
 		});
 		app.get('/.well-known/audiocity', () => ({
 			name: 'Audiocity', version: '0.1.0', url: config.publicUrl,
-			features: ['audio-uploads', 'audacity-block-sync', 'project-audio-previews', 'aup3-archives', 'aup4-archives', 'oauth-pkce'],
+			features: ['audio-uploads', 'audacity-block-sync', 'project-audio-previews', 'aup3-archives', 'aup4-archives', 'oauth-pkce', 'shared-library', 'audio-metadata', 'client-wavpack-playback'],
 			limits: { max_upload_bytes: config.maxUploadBytes, max_user_bytes: config.maxUserBytes },
 		}));
 		await registerBlobRoutes(app, blobs);
 		registerAuthRoutes(app, ctx);
 		await registerAudioRoutes(app, ctx);
 		await registerProjectRoutes(app, ctx);
+		await registerPlaybackAssets(app);
 		registerConsoleRoutes(app, ctx);
 		await app.ready();
 		return { app, ctx, bootstrapPassword };
