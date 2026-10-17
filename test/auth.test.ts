@@ -379,18 +379,13 @@ void test('Audacity browser handoff validates token ownership and only redirects
 		assert.match(handoff.body, /history\.replaceState/);
 		const script = handoff.body.match(/<script nonce="[^"]+">([\s\S]*?)<\/script>/)?.[1];
 		assert.ok(script);
-		let clicked: (() => void) | undefined;
 		let destination: string | undefined;
 		const stored: unknown[][] = [];
 		runInNewContext(script, {
 			history: { replaceState() {} },
-			document: { getElementById: () => ({ addEventListener: (_event: string, handler: () => void) => { clicked = handler; } }) },
 			sessionStorage: { setItem: (...values: unknown[]) => { stored.push(values); } },
 			location: { replace: (url: string) => { destination = url; } }
 		});
-		assert.equal(stored.length, 0, 'A linked token must not silently switch the browser account.');
-		assert.equal(destination, undefined);
-		assert.ok(clicked); clicked();
 		assert.deepEqual(stored, [['audiocity.access-token', token]]);
 		assert.equal(destination, `${f.config.publicUrl}${path}`);
 		for (const url of ['https://evil.example/', '//evil.example/path', String.raw`\\evil.example\path`, String.raw`/\evil.example/path`, 'http://localhost:3000@evil.example/', 'http://user:pass@localhost:3000/', 'javascript:alert(1)', 'http://[invalid', '//projects.evil.example/123', '//projects:8080/123', '//projects@evil.example/123', String.raw`//projects\@evil.example/123`, '//projects/123/../../evil', '//projects/unrecognized/path', 'http://projects/123']) {
@@ -415,15 +410,12 @@ void test('Audacity project links restore a missing cached owner without treatin
 			assert.equal(handoff.statusCode, 200, suffix);
 			const script = handoff.body.match(/<script nonce="[^"]+">([\s\S]*?)<\/script>/)?.[1];
 			assert.ok(script);
-			let clicked: (() => void) | undefined;
 			let destination: string | undefined;
 			runInNewContext(script, {
 				history: { replaceState() {} },
-				document: { getElementById: () => ({ addEventListener: (_event: string, handler: () => void) => { clicked = handler; } }) },
 				sessionStorage: { setItem() {} },
 				location: { replace: (url: string) => { destination = url; } }
 			});
-			assert.ok(clicked); clicked();
 			assert.equal(destination, `${f.config.publicUrl}/${user.username}/projects${suffix}`);
 		}
 	} finally { await f.close(); }

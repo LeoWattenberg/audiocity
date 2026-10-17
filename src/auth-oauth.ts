@@ -93,8 +93,8 @@ export class OAuthAuthorization {
 		if (target.origin !== this.auth.config.publicUrl || target.username || target.password) throw new ApiError(422, 'Browser destination must belong to this Audiocity server.');
 		const nonce = secret();
 		return reply.header('Cache-Control', 'no-store').header('Referrer-Policy', 'no-referrer')
-			.header('Content-Security-Policy', `default-src 'none'; script-src 'nonce-${nonce}'; frame-ancestors 'none'; base-uri 'none'`)
-			.type('text/html; charset=utf-8').send(browserHandoffHtml(token, target.href, nonce, user.email));
+			.header('Content-Security-Policy', `default-src 'none'; script-src 'nonce-${nonce}'; style-src 'self'; frame-ancestors 'none'; base-uri 'none'`)
+			.type('text/html; charset=utf-8').send(browserHandoffHtml(token, target.href, nonce));
 	}
 	private registerClient(body: Record<string, unknown>, reply: FastifyReply) {
 		if (!Array.isArray(body.redirect_uris) || !body.redirect_uris.length || body.redirect_uris.length > 10) {

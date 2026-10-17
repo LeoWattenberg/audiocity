@@ -34,14 +34,16 @@ textarea{box-sizing:border-box;width:100%;padding:1rem;font:inherit;overflow-wra
 </main></html>`;
 }
 
-export function browserHandoffHtml(token: string, target: string, nonce: string, email: string): string {
+export function browserHandoffHtml(token: string, target: string, nonce: string): string {
 	const scriptValue = (value: string) => JSON.stringify(value).replace(/</g, '\\u003c');
-	return `<!doctype html><html lang="en"><meta charset="utf-8"><title>Opening Audiocity</title>
-<h1>Open your Audiocity account</h1><button id="open-console">Continue as ${escapeHtml(email)}</button><script nonce="${escapeHtml(nonce)}">
+	return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Opening Audiocity</title><link rel="stylesheet" href="/console.css"></head><body>
+<main><h1>Opening Audiocity…</h1><p>You’ll be redirected automatically.</p>
+<p><a href="${escapeHtml(target)}">Continue to Audiocity</a></p>
+<noscript><p>JavaScript is required to link the browser console. Follow the link and sign in to continue.</p></noscript></main>
+<script nonce="${escapeHtml(nonce)}">
 history.replaceState(null,"","/auth/callback");
-document.getElementById("open-console").addEventListener("click",()=>{
 sessionStorage.setItem("audiocity.access-token",${scriptValue(token)});
 location.replace(${scriptValue(target)});
-});
-</script><noscript><p>JavaScript is required to link the browser console. <a href="${escapeHtml(target)}">Continue to Audiocity</a> and sign in.</p></noscript></html>`;
+</script></body></html>`;
 }

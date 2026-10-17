@@ -34,9 +34,7 @@ for (const flow of ['manual token', 'password']) {
 		const destination = `/${user.username}/audio/audacity-upload/edit?mtm_campaign=Audacity&mtm_source=Audacity-3.7.9&mtm_content=Share_Audio_Menu`;
 		const handoff = await page.goto(`/auth/check-and-redirect?${new URLSearchParams({ token: tokens.access_token, user: user.id, url: destination })}`);
 		expect(handoff?.status()).toBe(200);
-		await expect(page).toHaveURL(`${baseURL!}/auth/callback`);
-		expect(await page.evaluate(() => sessionStorage.getItem('audiocity.access-token'))).toBeNull();
-		await page.getByRole('button', { name: 'Continue as oauth-browser@example.test', exact: true }).click();
+		await expect(page).toHaveURL(`${baseURL!}/?view=audio`);
 		await expect(page.getByRole('heading', { name: 'Audio library', exact: true })).toBeVisible();
 		await expect(page.getByText('Signed in as oauth-browser (oauth-browser@example.test)', { exact: true })).toBeVisible();
 		expect(await page.evaluate(() => sessionStorage.getItem('audiocity.access-token'))).toBe(tokens.access_token);
@@ -71,7 +69,6 @@ test('Audacity saved project browser links open the project library with or with
 		for (const path of [`/${user.username}/projects/${id}`, `//projects/${id}`, '//projects']) {
 			const handoff = await page.goto(`/auth/check-and-redirect?${new URLSearchParams({ token, user: user.id, url: path + tracking })}`);
 			expect(handoff?.status()).toBe(200);
-			await page.getByRole('button', { name: 'Continue as oauth-browser@example.test', exact: true }).click();
 			await expect(page).toHaveURL(`${baseURL!}/?view=projects`);
 			await expect(page.getByRole('heading', { name: 'Project library', exact: true })).toBeVisible();
 			await expect(page.getByRole('heading', { name: 'Project browser handoff', exact: true })).toBeVisible();

@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Automatically open the requested browser page after an authenticated Audacity
+  handoff, with a styled fallback instead of an extra confirmation button.
 - Play native project audio previews in the console library and revision history;
   detect uploaded mixdown formats and repair legacy MIME types at startup.
 - Label previews from older revisions and offer preview generation in Audacity.
