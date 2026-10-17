@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+- Consolidate the browser library into Audio and Projects tabs, with one header
+  upload action for mixed audio and AUP3/AUP4 files.
+- Add dedicated playback and metadata pages with user-scoped slugs, editable
+  tags and descriptions, administrator-managed categories, and ARR/CC licenses.
+- Add spreadsheet-style metadata management with rectangular selection,
+  quoted multiline TSV copy/paste, fill, undo and atomic batch saves.
+- Decode WavPack audio in a browser worker using a bundled, reproducible
+  WebAssembly runtime; include decoder source and third-party notices.
+- Add optional read-only server-folder indexing and shared public uploads, with
+  persistent per-user controls for inclusion in Audacity's lists and search.
 - Automatically open the requested browser page after an authenticated Audacity
   handoff, with a styled fallback instead of an extra confirmation button.
 - Play native project audio previews in the console library and revision history;

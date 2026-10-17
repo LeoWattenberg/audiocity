@@ -40,8 +40,15 @@ responses and cannot stand in for native audio.com project synchronization.
 This compatibility does not include collections, cover-image uploads, social
 operations, statistics, subscription policies, processing/transcoding, waveforms,
 or author/collection search results. Audio search matches literal substrings
-rather than audio.com's relevance ranking. The absence of media transcoding means
-browser playback remains limited to codecs supported by that browser. Windows
+rather than audio.com's relevance ranking. The server does not transcode media;
+formats other than WavPack depend on the browser's native codec support. Windows
 Audacity 3.7.9 has been tested manually for login, audio upload, cloud project
 save/reopen, and preview generation against a WSL-hosted server. Other versions
 still require validation.
+
+Audiocity's browser playback adds a local WebAssembly decoder for WavPack
+originals. Its shared-library extension can include a configured server directory
+and other users' ready public uploads in native audio lists and search. Users can
+disable this inclusion persistently; explicit console source filters remain
+available. Audio editing and deletion stay owner-only, with administrators able
+to edit metadata for server-directory recordings. See the [library API](library-api.md).

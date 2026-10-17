@@ -8,7 +8,11 @@ Implemented:
 - Original sound uploads: WAV, MP3, FLAC, WavPack, AIFF, Ogg, and M4A, with private, unlisted, or public visibility and HTTP range playback/downloads.
 - Audacity's native cloud snapshot/block protocol, missing-block reuse, resumable transfers, revisions, conflict detection, and history.
 - Complete AUP3/AUP4 file revisions for clients such as Soundscaper, preserving the uploaded SQLite file byte for byte.
-- A small browser console for accounts, uploads, libraries, sharing, project audio previews, and project archive downloads. Actions are available through its menu. Audacity's **Update Cloud Audio Preview** supplies native project previews; older previews are labeled when a later save has no mixdown.
+- One library with Audio and Projects tabs, a header **+ Upload** action for audio and AUP3/AUP4 files, and dedicated audio playback and metadata pages.
+- Client-side WavPack playback, including Audacity's lossless uploads. Originals stay unchanged; the browser loads its decoder only when needed.
+- A shared library combining a configured server directory with public uploads, with a persistent per-user switch to exclude shared files from Audacity's listings.
+- Administrator-managed categories, tags, descriptions, slugs, licenses, and a spreadsheet-style **Manage files** page for bulk metadata editing. See the [library guide](docs/library.md).
+- Native project audio previews and project archive downloads. Audacity's **Update Cloud Audio Preview** supplies native project previews; older previews are labeled when a later save has no mixdown.
 
 Compatibility is tested against the observed protocol, with manual Windows Audacity 3.7.9 testing against a WSL-hosted server for login, audio upload, cloud project save/reopen, and preview generation. Other editor versions still require validation. Clients must be configured to use Audiocity: [Audacity 3 setup](docs/clients.md#audacity-3-select-your-server-in-audacitycfg) uses `audacity.cfg`; Audacity 4 currently hardcodes its cloud server and requires a custom build, [Soundscaper](https://soundscaper.org) has a preference in Edit→Preferences→Advanced. Whole-file archive storage and Audacity's native block transport are separate, explicitly identified formats. See [client setup](docs/clients.md) and [protocol details](docs/project-protocol.md).
 
@@ -61,6 +65,7 @@ Copy `.env.example` to `.env` to override defaults. Recreate the container after
 | `AUDIOCITY_REGISTRATION` | `false`; administrator can create accounts through the console |
 | `AUDIOCITY_MAX_UPLOAD_BYTES` | 1 GiB per transfer |
 | `AUDIOCITY_MAX_USER_BYTES` | 20 GiB per account, including retained revisions |
+| `AUDIOCITY_SHARED_DIR` | Optional server directory of shared audio; mount it into the container and use its container path |
 | `AUDIOCITY_AUDACITY_CLIENT_ID` | `audiocity-desktop`; configure the same value in Audacity |
 | `AUDIOCITY_AUDACITY_CLIENT_SECRET` | `audiocity-local-desktop`; local compatibility client credential |
 | `AUDIOCITY_BIND_ADDRESS` | `127.0.0.1`; Compose port binding |
@@ -73,6 +78,7 @@ For another machine or a public deployment, set the public HTTPS URL and place a
 ## API
 
 - [Audio uploads, listing, editing, sharing and downloads](docs/audio-api.md)
+- [Library, uploads, playback, metadata and bulk editing](docs/library.md)
 - [Project snapshots, whole-file archives, revisions, and resuming uploads](docs/project-protocol.md)
 - [Authentication, scopes, OAuth clients and password changes](docs/authentication.md)
 - [audio.com API compatibility and deliberate extensions](docs/audio-com-compatibility.md)
@@ -113,7 +119,7 @@ Set `AUDIOCITY_URL` and `AUDIOCITY_SMOKE_EMAIL` if needed. This creates and dele
 
 ## Scope
 
-This implements the requested storage/upload/sync service, rather than all audio.com's social, subscription, collection, statistics, embedding, and discovery APIs. Audio stays in its original format; browser codec support determines preview playback. The server does not transcode, interpret native block audio, convert project generations, merge concurrent edits, or reconstruct whole project files from native block snapshots. Editors remain responsible for those operations.
+Audiocity implements storage, playback, metadata and project synchronization; audio.com's social, subscription, collection and statistics features are outside its scope. Audio stays in its original format. WavPack playback uses a browser-side decoder; other formats use the browser's available codecs. The server does not transcode, interpret native block audio, convert project generations, merge concurrent edits, or reconstruct whole project files from native block snapshots. Editors remain responsible for those operations.
 
 Run one server process against one local data volume. Multi-replica operation, remote/network filesystems, and shared SQLite volumes are unsupported. See the operations guide for backup and cleanup behavior.
 

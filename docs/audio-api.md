@@ -3,8 +3,10 @@
 Audiocity preserves uploaded originals on the persistent data volume. It does not
 transcode, normalize, or render waveforms. Playback uses the original source and
 HTTP byte ranges. WAV duration is extracted when a normal RIFF `fmt`/`data` layout
-is present; duration is otherwise zero. Browser playback depends on the browser's
-codec support: WavPack and AIFF commonly require downloading into an editor.
+is present; duration is otherwise zero in the server metadata. Playback pages
+decode WavPack in a browser worker using the bundled WebAssembly decoder; their
+player obtains the decoded duration. Other formats depend on native browser
+codec support. See the [library guide](library.md).
 
 ## Upload an original
 
@@ -37,13 +39,17 @@ success callback confirms it. Failed or incomplete uploads cannot be shared.
 
 ## Library operations
 
-All `/v1/audio/*` operations require the owner's bearer token, including view.
-IDs may be UUIDs or `slug:your-audio-slug` for the owner's library.
+All `/v1/audio/*` operations require a bearer token with audio access. Mutations
+remain owner-only. Native listings also include shared recordings when the
+account's `include_shared` preference is enabled. IDs may be UUIDs or
+`slug:your-audio-slug` for the owner's library; folder recordings use stable
+`shared-…` IDs. The console uses the explicit [library API](library-api.md) for
+source selection, categories, preferences and transactional metadata batches.
 
 | Method and path | Behavior |
 | --- | --- |
-| `GET /v1/audio/list` | Array of the current user's recordings, including pending uploads |
-| `GET /v1/audio/view?id=…` | Metadata for one owned recording |
+| `GET /v1/audio/list` | Array of owned recordings, including pending uploads, plus shared recordings according to the account preference |
+| `GET /v1/audio/view?id=…` | Metadata for an owned or accessible shared recording |
 | `PATCH /v1/audio/update?id=…` | Edit title, slug, category, description, tags, license, visibility, or download permission |
 | `POST /v1/audio/delete?id=…` | Delete owned metadata and source bytes; returns `204` |
 
@@ -55,7 +61,10 @@ a playback URL expires.
 Title and name are limited to 256 characters, description to 500, and tags to 50
 strings of at most 64 characters. Slugs use lowercase letters, digits and hyphens
 and are unique within one user's library. Automatic slugs receive numeric suffixes
-when needed. Categories and licenses follow the audio.com public API enumeration.
+when needed. Categories are persisted and controlled by administrators; legacy
+`voice-over` and `sound-design` category IDs map to `voiceover` and `sfx`.
+Licenses include All rights reserved, CC0 and the six Creative Commons 4.0
+licenses. The legacy `none` license is accepted as All rights reserved.
 
 ## Search public recordings
 

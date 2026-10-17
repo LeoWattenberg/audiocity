@@ -53,6 +53,26 @@ If a client changes an audio item from shared to private, new public metadata re
 
 The service disables automatic HTTP request logging to avoid logging URL capabilities and redacts authorization/cookie fields from structured logs. A reverse proxy may log URLs independently; configure it to omit query strings for `/uploads/` and `/media/`.
 
+## Shared audio directory
+
+Set `AUDIOCITY_SHARED_DIR` to an existing directory visible to the server process.
+For Docker, mount the host directory read-only and configure its path inside the
+container. The shared library combines indexed folder recordings with ready
+public uploads; uploads continue to use Audiocity's managed blob storage. See
+[directory configuration and library API](library-api.md) for a Compose example.
+
+Folder originals are read in place, without copying or rewriting them. Back up
+that directory separately from Audiocity's data volume. Its titles, categories,
+tags and other editable metadata live in SQLite and are covered by the normal
+database backup. Folder bytes do not consume an uploader's blob quota. Symlinks
+and files outside the configured directory are excluded. Folder recordings are
+available to signed-in accounts, while public upload playback links also work
+without signing in. Each account can hide shared recordings from its default
+Audacity lists without changing other accounts' preferences.
+
+Shared media uses expiring capability URLs under `/shared-media/`; exclude their
+query strings from reverse-proxy logs just like `/media/` and `/uploads/`.
+
 ## HTTPS reverse proxy
 
 Configure the external origin in `AUDIOCITY_PUBLIC_URL` so returned upload/download URLs match what clients can reach. The service does not infer this from forwarded headers. A proxy can terminate TLS and stream requests to `127.0.0.1:8080`. Allow the configured maximum file size and uploads lasting up to 30 minutes; avoid a short default proxy timeout. The application listens at the origin root and does not support a URL path prefix.
