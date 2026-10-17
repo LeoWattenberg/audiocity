@@ -10,7 +10,7 @@ RUN npm run build && npm prune --omit=dev
 
 FROM node:26.5.0-bookworm-slim
 LABEL org.opencontainers.image.title="Audiocity" \
-    org.opencontainers.image.source="https://github.com/LeoWattenberg/audiocity" \
+    org.opencontainers.image.source="https://github.com/mindscaper-org/audiocity" \
     org.opencontainers.image.licenses="AGPL-3.0-only"
 ENV NODE_ENV=production AUDIOCITY_DATA_DIR=/data AUDIOCITY_HOST=0.0.0.0 AUDIOCITY_PORT=8080
 WORKDIR /app

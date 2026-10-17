@@ -20,7 +20,7 @@ Compatibility is tested against the observed protocol, with manual Windows Audac
 
 Install Docker with Compose v2 or newer, then:
 
-1. Download and extract `audiocity-VERSION-deploy.tar.gz` from the [latest release](https://github.com/LeoWattenberg/audiocity/releases/latest).
+1. Download and extract `audiocity-VERSION-deploy.tar.gz` from the [latest release](https://github.com/mindscaper-org/audiocity/releases/latest).
 2. Open a terminal in the extracted folder and run:
 
 ```sh
@@ -33,7 +33,7 @@ The script downloads the prebuilt Linux image for your Docker server (amd64 or a
 To build from a source checkout instead:
 
 ```sh
-git clone https://github.com/LeoWattenberg/audiocity.git
+git clone https://github.com/mindscaper-org/audiocity.git
 cd audiocity
 docker compose up --build -d
 docker compose logs audiocity

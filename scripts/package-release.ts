@@ -103,8 +103,9 @@ deploy bundle, preserve your .env, and run its deploy.sh. To roll back, restore
 the backup with the previous release. Never use docker compose down -v unless
 you intend to delete all data. See docs/operations.md for backups and recovery.
 
-Clients need configuration: see docs/clients.md. Audacity desktop end-to-end
-validation remains outstanding. Source is available from /source.tar.gz and
+Clients need configuration: see docs/clients.md. Windows Audacity 3.7.9 has been
+tested manually against a WSL-hosted server; other versions require validation.
+Source is available from /source.tar.gz and
 the release's source archive under AGPL-3.0-only.
 `);
 	});

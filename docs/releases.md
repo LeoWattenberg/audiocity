@@ -1,6 +1,6 @@
 # Releases and deployment packages
 
-Get official downloads from [GitHub Releases](https://github.com/LeoWattenberg/audiocity/releases/latest).
+Get official downloads from [GitHub Releases](https://github.com/mindscaper-org/audiocity/releases/latest).
 Each release provides:
 
 | Archive | Purpose |
@@ -72,8 +72,8 @@ the locked dependencies on the target machine.
 To export an image locally on its target architecture:
 
 ```sh
-docker build -t audiocity:0.1.0 .
-docker save audiocity:0.1.0 | gzip > dist/release/audiocity-0.1.0-docker-amd64.tar.gz
+docker build -t audiocity:0.2.0 .
+docker save audiocity:0.2.0 | gzip > dist/release/audiocity-0.2.0-docker-amd64.tar.gz
 cd dist/release
 sha256sum *.tar.gz > SHA256SUMS
 ```
@@ -96,11 +96,11 @@ the service version in `src/app.ts`, `CHANGELOG.md`, and release notes in
 matching tag:
 
 ```sh
-git tag -a v0.1.0 -m 'Audiocity v0.1.0'
-git push origin v0.1.0
+git tag -a v0.2.0 -m 'Audiocity v0.2.0'
+git push origin v0.2.0
 ```
 
-Use the next version in place of `v0.1.0`. Published version tags and their
+Use the next version in place of `v0.2.0`. Published version tags and their
 artifacts should remain immutable. The workflow uses GitHub's built-in token
 with release write access only in the publishing job; no registry or npm
 publishing credentials are required.

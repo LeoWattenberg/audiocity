@@ -23,7 +23,7 @@ if ! docker image inspect "audiocity:$version" >/dev/null 2>&1; then
   download_dir=$(mktemp -d)
   trap 'rm -rf "$download_dir"' EXIT
   trap 'exit 1' HUP INT TERM
-  base="https://github.com/LeoWattenberg/audiocity/releases/download/v$version"
+  base="https://github.com/mindscaper-org/audiocity/releases/download/v$version"
   image="audiocity-$version-docker-$arch.tar.gz"
   curl --fail --location --retry 3 "$base/SHA256SUMS" -o "$download_dir/SHA256SUMS"
   curl --fail --location --retry 3 "$base/$image" -o "$download_dir/$image"

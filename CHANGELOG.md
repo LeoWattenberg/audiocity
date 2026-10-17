@@ -1,6 +1,6 @@
 # Release notes
 
-## Unreleased
+## 0.2.0 — 2026-10-17
 
 - Consolidate the browser library into Audio and Projects tabs, with one header
   upload action for mixed audio and AUP3/AUP4 files.
@@ -19,6 +19,12 @@
 - Label previews from older revisions and offer preview generation in Audacity.
 - Prevent Audacity 3's cached POST handles from corrupting subsequent Ctrl+S saves
   by closing POST response connections, while retaining strict JSON validation.
+- Return stable numeric native project IDs so Windows Audacity 3 can reopen
+  cloud projects after clearing its local cache, retaining legacy UUID routes.
+- Fix manual account-linking tokens and authenticated browser destinations for
+  Audacity 3's audio upload and cloud-project flows.
+- Update deployment downloads and repository links after the move to
+  `mindscaper-org/audiocity`.
 
 ## 0.1.0
 

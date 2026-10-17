@@ -59,14 +59,14 @@ export async function createApp(overrides: Partial<Config> = {}) {
 		app.addContentTypeParser('application/x-www-form-urlencoded', { parseAs: 'string' }, (_request, body, done) => {
 			done(null, Object.fromEntries(new URLSearchParams(String(body))));
 		});
-		app.get('/health', () => { db.get('SELECT 1'); return { status: 'ok', service: 'audiocity', version: '0.1.0' }; });
+		app.get('/health', () => { db.get('SELECT 1'); return { status: 'ok', service: 'audiocity', version: '0.2.0' }; });
 		app.get('/source.tar.gz', (_request, reply) => {
 			const archive = join(import.meta.dirname, '../dist/source.tar.gz');
 			if (!existsSync(archive)) throw new ApiError(404, 'Run npm run build to package the source archive.');
 			return reply.type('application/gzip').header('Content-Disposition', 'attachment; filename="audiocity-source.tar.gz"').send(createReadStream(archive));
 		});
 		app.get('/.well-known/audiocity', () => ({
-			name: 'Audiocity', version: '0.1.0', url: config.publicUrl,
+			name: 'Audiocity', version: '0.2.0', url: config.publicUrl,
 			features: ['audio-uploads', 'audacity-block-sync', 'project-audio-previews', 'aup3-archives', 'aup4-archives', 'oauth-pkce', 'shared-library', 'audio-metadata', 'client-wavpack-playback'],
 			limits: { max_upload_bytes: config.maxUploadBytes, max_user_bytes: config.maxUserBytes },
 		}));
