@@ -135,7 +135,9 @@ void test('existing shared directory is indexed without copying originals; signe
 		assert.equal((await f.app.inject({ url: relative(item.play.url), headers: { range: 'bytes=1000-' } })).statusCode, 416);
 		assert.equal((await f.app.inject({ method: 'PATCH', url: `/library/audio/${item.id}`, headers: auth(other.token), payload: { title: 'stolen' } })).statusCode, 404);
 		assert.equal((await f.app.inject({ method: 'PATCH', url: `/library/audio/${item.id}`, headers: auth(f.token), payload: { title: 'Forest rain', category: 'sfx', slug: 'forest-rain' } })).statusCode, 200);
+		const changes = f.ctx.db.get<{ count: number }>('SELECT total_changes() count')?.count;
 		await f.app.inject({ method: 'POST', url: '/admin/shared/rescan', headers: auth(f.token) });
+		assert.equal(f.ctx.db.get<{ count: number }>('SELECT total_changes() count')?.count, changes, 'unchanged directory scans must avoid rewriting every indexed row');
 		const edited = (await f.app.inject({ url: `/library/audio/${item.id}`, headers: auth(f.token) })).json<Audio>();
 		assert.equal(edited.title, 'Forest rain'); assert.equal(edited.slug, 'forest-rain'); assert.equal(edited.can_edit, true);
 		assert.deepEqual(await readFile(join(directory, 'nested', 'Rain.flac')), bytes);

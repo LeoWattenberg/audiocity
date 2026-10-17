@@ -70,11 +70,15 @@ export class SharedLibrary {
 						try {
 							file = await this.verifiedFile(path);
 							const stat = await file.stat();
+							const id = `shared-${createHash('sha256').update(path).digest('hex').slice(0, 32)}`;
+							const existing = this.db.get<AudioRecord>('SELECT * FROM audio WHERE id=?', id);
+							if (existing?.shared_mime && existing.shared_size === stat.size && existing.shared_mtime === stat.mtimeMs) {
+								if (!existing.shared_present) this.db.run('UPDATE audio SET shared_present=1 WHERE id=?', id);
+								seen.push(id); continue;
+							}
 							const header = Buffer.alloc(65_536);
 							const { bytesRead } = await file.read(header, 0, header.length, 0);
 							const { mime, duration } = inspectAudioHeader(header.subarray(0, bytesRead));
-							const id = `shared-${createHash('sha256').update(path).digest('hex').slice(0, 32)}`;
-							const existing = this.db.get<AudioRecord>('SELECT * FROM audio WHERE id=?', id);
 							if (!existing) {
 								const name = basename(path).slice(0, 256); const title = name.replace(/\.[^.]{1,8}$/, '') || name;
 								const base = audioSlug(title); let slug = base;
