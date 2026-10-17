@@ -71,7 +71,7 @@ export async function createApp(overrides: Partial<Config> = {}) {
 		}));
 		await registerBlobRoutes(app, blobs);
 		registerAuthRoutes(app, ctx);
-		registerAudioRoutes(app, ctx);
+		await registerAudioRoutes(app, ctx);
 		await registerProjectRoutes(app, ctx);
 		registerConsoleRoutes(app, ctx);
 		await app.ready();

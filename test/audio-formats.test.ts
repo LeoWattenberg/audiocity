@@ -14,9 +14,11 @@ void test('supported audio container signatures and aliases preserve original fo
 			['audio/mpeg', 'mp3', 'ID3', 0, 3],
 			['audio/MPA', 'mp3', 'ID3', 0, 3],
 			['audio/mpa', 'mp3', 'ID3', 0, 3],
+			['audio/mp3', 'mp3', 'ID3', 0, 3],
 			['Audio/MPEG', 'mp3', 'ID3', 0, 3],
 			['audio/x-wavpack', 'wv', 'wvpk', 0, 32],
 			['audio/ogg', 'ogg', 'OggS', 0, 27],
+			['audio/opus', 'ogg', 'OggS', 0, 27],
 			['application/ogg', 'ogg', 'OggS', 0, 27],
 			['audio/mp4', 'm4a', 'ftypM4A ', 4, 12],
 			['audio/x-aiff', 'aiff', 'FORM0000AIFF', 0, 12],
@@ -42,5 +44,12 @@ void test('container signatures must match declaration and unknown formats are r
 		assert.throws(() => audioFormat('text/plain'), /Unsupported/);
 		await writeFile(path, Buffer.from([255, 251, 144, 0]));
 		assert.equal(await validateAudio(path, 'audio/mpeg'), 0);
+		await writeFile(path, Buffer.from([255, 241, 80, 128, 1, 127, 252]));
+		assert.equal(await validateAudio(path, 'audio/aac'), 0);
+		assert.equal(audioFormat('audio/x-aac'), 'aac');
+		await assert.rejects(validateAudio(path, 'audio/mpeg'), /does not match/);
+		await writeFile(path, Buffer.from([0x1a, 0x45, 0xdf, 0xa3]));
+		assert.equal(await validateAudio(path, 'audio/webm'), 0);
+		assert.equal(audioFormat('video/webm'), 'webm');
 	} finally { await rm(directory, { recursive: true, force: true }); }
 });

@@ -6,6 +6,8 @@ void test('blank initial password means generate credentials and origin override
 	const defaults = readConfig({ AUDIOCITY_ADMIN_PASSWORD: '' });
 	assert.equal(defaults.adminPassword, undefined);
 	assert.equal(defaults.publicUrl, 'http://localhost:8080');
+	assert.equal(defaults.sharedDir, undefined);
+	assert.equal(readConfig({ AUDIOCITY_SHARED_DIR: '/srv/sfx' }).sharedDir, '/srv/sfx');
 	assert.deepEqual(readConfig({ AUDIOCITY_CORS_ORIGINS: 'https://editor.example, https://sound.example' }).corsOrigins, ['https://editor.example', 'https://sound.example']);
 });
 

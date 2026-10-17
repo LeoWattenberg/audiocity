@@ -18,6 +18,7 @@ export function readConfig(env: NodeJS.ProcessEnv = process.env): Config {
 	}
 	return {
 		dataDir: resolve(env.AUDIOCITY_DATA_DIR ?? './data'), publicUrl: publicUrl.origin,
+		...(env.AUDIOCITY_SHARED_DIR?.trim() ? { sharedDir: resolve(env.AUDIOCITY_SHARED_DIR) } : {}),
 		host: env.AUDIOCITY_HOST ?? '0.0.0.0', port,
 		registration: env.AUDIOCITY_REGISTRATION === 'true',
 		corsOrigins: (env.AUDIOCITY_CORS_ORIGINS ?? publicUrl.origin).split(',').map(s => s.trim()).filter(Boolean),

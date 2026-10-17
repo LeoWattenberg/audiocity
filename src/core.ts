@@ -3,6 +3,7 @@ import type { Database } from './database.ts';
 
 export interface Config {
 	dataDir: string;
+	sharedDir?: string;
 	publicUrl: string;
 	host: string;
 	port: number;

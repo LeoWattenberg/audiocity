@@ -3,81 +3,15 @@ import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { ApiError, now, objectBody, pageQuery, requiredString } from './core.ts';
 import type { Context, User } from './core.ts';
 import { audioFormat, validateAudio } from './audio-formats.ts';
+import { audioLicenses, audioSlug, boolean, initializeAudioSchema, mutableFields, saveMetadata, validateMetadata } from './audio-metadata.ts';
+import type { AudioRecord } from './audio-metadata.ts';
+import { SharedLibrary } from './shared-library.ts';
 
-interface AudioRecord {
-	id: string;
-	owner_id: string;
-	blob_id: string;
-	name: string;
-	title: string;
-	slug: string;
-	category: string;
-	description: string;
-	tags: string;
-	license: string;
-	visibility: string;
-	is_downloadable: number;
-	duration: number;
-	created: number;
-	updated: number;
-}
-
-const categories = new Set(['music', 'podcast', 'voice-over', 'sound-design', 'cover', 'beats', 'audiobook', 'recording', 'other']);
-const licenses = new Set(['none', 'arr', 'cc-0', 'cc-by', 'cc-by-sa', 'cc-by-nc', 'cc-by-nc-sa', 'cc-by-nd', 'cc-by-nc-nd']);
-const mutableFields = new Set(['title', 'slug', 'category', 'description', 'tags', 'license', 'is_listed', 'is_downloadable', 'visibility', 'public']);
-
-function boolean(value: unknown, field: string): boolean {
-	if (typeof value !== 'boolean') throw new ApiError(422, `${field} must be a boolean.`, 'ValidationError');
-	return value;
-}
-
-function slug(value: string): string {
-	return value.normalize('NFKD').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 100) || 'audio';
-}
-
-function validateMetadata(body: Record<string, unknown>, current: AudioRecord): AudioRecord {
-	const result = { ...current };
-	if ('title' in body) result.title = requiredString(body.title, 'title', 256);
-	if ('slug' in body) {
-		result.slug = requiredString(body.slug, 'slug', 100);
-		if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(result.slug)) throw new ApiError(422, 'slug must contain lowercase letters, numbers, and hyphens.', 'ValidationError');
-	}
-	if ('description' in body) {
-		if (typeof body.description !== 'string' || body.description.length > 500) throw new ApiError(422, 'description must contain at most 500 characters.', 'ValidationError');
-		result.description = body.description;
-	}
-	if ('tags' in body) {
-		if (!Array.isArray(body.tags) || body.tags.length > 50) throw new ApiError(422, 'tags must be an array of at most 50 strings.', 'ValidationError');
-		result.tags = JSON.stringify(body.tags.map(tag => requiredString(tag, 'tag', 64)));
-	}
-	for (const [key, values] of [['category', categories], ['license', licenses]] as const) {
-		if (key in body) {
-			const value = requiredString(body[key], key, 32);
-			if (!values.has(value)) throw new ApiError(422, `Unsupported ${key}.`, 'ValidationError');
-			result[key] = value;
-		}
-	}
-	if ('is_listed' in body) result.visibility = boolean(body.is_listed, 'is_listed') ? 'public' : 'unlisted';
-	if ('public' in body) result.visibility = boolean(body.public, 'public') ? 'public' : 'unlisted';
-	if ('visibility' in body) {
-		if (typeof body.visibility !== 'string' || !['private', 'unlisted', 'public'].includes(body.visibility)) throw new ApiError(422, 'visibility must be private, unlisted, or public.', 'ValidationError');
-		result.visibility = body.visibility;
-	}
-	if ('is_downloadable' in body) result.is_downloadable = Number(boolean(body.is_downloadable, 'is_downloadable'));
-	return result;
-}
-
-export function registerAudioRoutes(app: FastifyInstance, ctx: Context): void {
-	ctx.db.exec(`CREATE TABLE IF NOT EXISTS audio (
-		id TEXT PRIMARY KEY, owner_id TEXT NOT NULL, blob_id TEXT NOT NULL,
-		name TEXT NOT NULL, title TEXT NOT NULL, slug TEXT NOT NULL, category TEXT NOT NULL,
-		description TEXT NOT NULL, tags TEXT NOT NULL, license TEXT NOT NULL,
-		visibility TEXT NOT NULL, is_downloadable INTEGER NOT NULL,
-		duration INTEGER NOT NULL DEFAULT 0, created INTEGER NOT NULL, updated INTEGER NOT NULL,
-		UNIQUE(owner_id, slug)
-	);
-	CREATE INDEX IF NOT EXISTS audio_owner_created ON audio(owner_id, created);
-	CREATE INDEX IF NOT EXISTS audio_visibility ON audio(visibility);`);
+export async function registerAudioRoutes(app: FastifyInstance, ctx: Context): Promise<void> {
+	initializeAudioSchema(ctx.db);
+	const shared = new SharedLibrary(ctx.db, ctx.config);
+	await shared.initialize();
+	app.get('/shared-media/:id', (request, reply) => shared.send(request, reply));
 	ctx.blobs.setValidator('audio', async (blob, path) => {
 		const duration = await validateAudio(path, blob.mime);
 		ctx.db.run('UPDATE audio SET duration=? WHERE id=?', duration, blob.resource_id);
@@ -88,7 +22,7 @@ export function registerAudioRoutes(app: FastifyInstance, ctx: Context): void {
 		const row = id.startsWith('slug:') && userId
 			? ctx.db.get<AudioRecord>('SELECT * FROM audio WHERE owner_id=? AND slug=?', userId, id.slice(5))
 			: ctx.db.get<AudioRecord>('SELECT * FROM audio WHERE id=?', id);
-		if (!row || (userId && row.owner_id !== userId)) throw new ApiError(404, 'Audio not found.', 'NotFound');
+		if (!row || (row.origin === 'shared-folder' && !row.shared_present) || (userId && row.owner_id !== userId)) throw new ApiError(404, 'Audio not found.', 'NotFound');
 		return row;
 	}
 	function queryId(request: FastifyRequest): string {
@@ -97,29 +31,56 @@ export function registerAudioRoutes(app: FastifyInstance, ctx: Context): void {
 	function visible(request: FastifyRequest, id: string, download = false): AudioRecord {
 		const row = find(id);
 		const user = request.headers.authorization ? owner(request) : undefined;
+		if (row.origin === 'shared-folder') {
+			if (!user) throw new ApiError(404, 'Audio not found.', 'NotFound');
+			return row;
+		}
 		if (user?.id === row.owner_id) return row;
 		if (row.visibility === 'private' || !ctx.blobs.ready(row.blob_id) || (download && !row.is_downloadable)) {
 			throw new ApiError(404, 'Audio not found.', 'NotFound');
 		}
 		return row;
 	}
-	function metadata(row: AudioRecord, legacyList = false) {
+	function metadata(row: AudioRecord, legacyList = false, viewer?: User) {
 		const user = ctx.auth.findUser(row.owner_id);
-		const blob = ctx.blobs.get(row.blob_id);
-		const ready = ctx.blobs.ready(row.blob_id);
-		const url = ready ? ctx.blobs.downloadUrl(row.blob_id) : '';
+		const folder = row.origin === 'shared-folder';
+		const blob = folder ? undefined : ctx.blobs.get(row.blob_id);
+		const ready = folder ? Boolean(row.shared_present) : ctx.blobs.ready(row.blob_id);
+		const url = ready ? folder ? shared.downloadUrl(row) : ctx.blobs.downloadUrl(row.blob_id) : '';
 		return {
 			id: row.id, title: row.title, slug: row.slug, name: row.name,
 			category: row.category, description: row.description, tags: JSON.parse(row.tags) as string[], license: row.license,
 			visibility: row.visibility, is_public: row.visibility === 'public', is_listed: row.visibility === 'public',
 			is_downloadable: Boolean(row.is_downloadable), status: ready ? 'ready' : blob?.state === 'failed' ? 'failed' : 'pending',
-			author_name: user?.name ?? '', username: user?.username ?? '',
-			author: legacyList ? user?.name ?? '' : { id: row.owner_id },
+			author_name: folder ? 'Shared library' : user?.name ?? '', username: user?.username ?? '',
+			author: legacyList ? folder ? 'Shared library' : user?.name ?? '' : { id: row.owner_id },
 			created: row.created, date_created: row.created, date_updated: row.updated,
-			image: '', source: { size: ready?.size ?? 0, duration: row.duration, mime: blob?.mime ?? '' },
+			image: '', source: { size: folder ? row.shared_size : typeof ready === 'object' ? ready.size : 0, duration: row.duration, mime: folder ? row.shared_mime : blob?.mime ?? '' },
 			play: { url, duration: row.duration, waveform: '' },
 			url: `${ctx.config.publicUrl}/public/audio/${row.id}`,
+			playback_path: `/audio/${row.id}/play`, origin: row.origin,
+			can_edit: Boolean(viewer && (folder ? viewer.admin : viewer.id === row.owner_id)),
 		};
+	}
+	function includeShared(user: User): boolean {
+		return ctx.db.get<{ include_shared: number }>('SELECT include_shared FROM library_preferences WHERE user_id=?', user.id)?.include_shared !== 0;
+	}
+	function sourceWhere(user: User, source: string): { sql: string; values: string[] } {
+		const mine = "(origin='upload' AND owner_id=?)";
+		const common = "((origin='upload' AND visibility='public' AND blob_id IN (SELECT id FROM blobs WHERE state='ready')) OR (origin='shared-folder' AND shared_present=1))";
+		return source === 'mine' ? { sql: mine, values: [user.id] }
+			: source === 'shared' ? { sql: common, values: [] }
+			: { sql: `(${mine} OR ${common})`, values: [user.id] };
+	}
+	function admin(request: FastifyRequest): User {
+		const user = owner(request);
+		if (!user.admin) throw new ApiError(403, 'Administrator access required.', 'Forbidden');
+		return user;
+	}
+	function editable(id: string, user: User): AudioRecord {
+		const row = find(id);
+		if (row.origin === 'shared-folder' ? !user.admin : row.owner_id !== user.id) throw new ApiError(404, 'Audio not found.', 'NotFound');
+		return row;
 	}
 	function ensureUnique(row: AudioRecord): void {
 		if (ctx.db.get('SELECT id FROM audio WHERE owner_id=? AND slug=? AND id<>?', row.owner_id, row.slug, row.id)) {
@@ -138,14 +99,15 @@ export function registerAudioRoutes(app: FastifyInstance, ctx: Context): void {
 		}
 		const name = body.name === undefined ? 'Untitled audio' : requiredString(body.name, 'name', 256);
 		const title = name.replace(/\.[^.]{1,8}$/, '') || name;
-		let row = validateMetadata(body, {
-			id: randomUUID(), owner_id: user.id, blob_id: '', name, title, slug: slug(title),
-			category: 'other', description: '', tags: '[]', license: 'none', visibility: 'unlisted',
+		let row = validateMetadata(ctx.db, body, {
+			id: randomUUID(), owner_id: user.id, blob_id: '', name, title, slug: audioSlug(title),
+			category: 'other', description: '', tags: '[]', license: 'arr', visibility: 'unlisted',
 			is_downloadable: 0, duration: 0, created: now(), updated: now(),
+			origin: 'upload', shared_path: '', shared_size: 0, shared_mtime: 0, shared_mime: '', shared_present: 0,
 		});
 		if (body.slug === undefined) {
 			const base = row.slug;
-			for (let index = 2; ctx.db.get('SELECT id FROM audio WHERE owner_id=? AND slug=?', user.id, row.slug); index++) row.slug = `${base}-${index}`;
+			for (let index = 2; ctx.db.get('SELECT id FROM audio WHERE owner_id=? AND slug=?', user.id, row.slug); index++) row.slug = `${base.slice(0, 90)}-${index}`;
 		}
 		ensureUnique(row);
 		const policy = ctx.blobs.create(user.id, {
@@ -157,7 +119,7 @@ export function registerAudioRoutes(app: FastifyInstance, ctx: Context): void {
 				VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`, row.id, row.owner_id, row.blob_id, row.name, row.title, row.slug, row.category,
 				row.description, row.tags, row.license, row.visibility, row.is_downloadable, row.duration, row.created, row.updated);
 		} catch (error) { await ctx.blobs.remove(policy.id); throw error; }
-		const audio = metadata(row);
+		const audio = metadata(row, false, user);
 		return { ...policy, audio, extra: { audio } };
 	}
 
@@ -165,8 +127,9 @@ export function registerAudioRoutes(app: FastifyInstance, ctx: Context): void {
 
 	app.get('/v1/search', { config: { rateLimit: {
 		max: 60, timeWindow: '1 minute', keyGenerator: request => owner(request).id,
-	} } }, request => {
-		owner(request);
+	} } }, async request => {
+		const user = owner(request);
+		await shared.scan();
 		const query = objectBody(request.query);
 		const search = query.query ?? '';
 		const types = query.types ?? '';
@@ -184,43 +147,138 @@ export function registerAudioRoutes(app: FastifyInstance, ctx: Context): void {
 			: `(audio.title LIKE ? ESCAPE '\\' OR audio.description LIKE ? ESCAPE '\\' OR users.name LIKE ? ESCAPE '\\'
 				OR EXISTS (SELECT 1 FROM json_each(audio.tags) WHERE value LIKE ? ESCAPE '\\'))`;
 		const params = term.startsWith('#') ? [term.slice(1)] : [pattern, pattern, pattern, pattern];
-		const rows = ctx.db.all<AudioRecord>(`SELECT audio.* FROM audio JOIN users ON users.id=audio.owner_id
-			WHERE audio.visibility='public' AND audio.blob_id IN (SELECT id FROM blobs WHERE state='ready') AND ${matching}
-			ORDER BY audio.created DESC,audio.rowid DESC LIMIT 10 OFFSET ?`, ...params, (Number(pageValue) - 1) * 10);
+		const scope = includeShared(user) ? sourceWhere(user, 'shared') : { sql: "(origin='upload' AND audio.owner_id=? AND visibility='public' AND blob_id IN (SELECT id FROM blobs WHERE state='ready'))", values: [user.id] };
+		const rows = ctx.db.all<AudioRecord>(`SELECT audio.* FROM audio LEFT JOIN users ON users.id=audio.owner_id
+			WHERE ${scope.sql} AND ${matching}
+			ORDER BY audio.created DESC,audio.rowid DESC LIMIT 10 OFFSET ?`, ...scope.values, ...params, (Number(pageValue) - 1) * 10);
 		return rows.map(row => ({ type: 'audio', model: metadata(row) }));
 	});
 
-	function list(request: FastifyRequest, legacy: boolean) {
+	async function list(request: FastifyRequest, legacy: boolean, library = false) {
 		const user = owner(request);
+		await shared.scan();
 		const query = objectBody(request.query);
-		const { page, perPage, search } = pageQuery(legacy ? query : { 'per-page': 50, ...query });
+		const { page, perPage, search } = pageQuery(legacy || library ? query : { 'per-page': 50, ...query });
 		const sort = query.sort ?? 'newest';
 		if (typeof sort !== 'string' || !['newest', 'oldest', 'az'].includes(sort)) throw new ApiError(422, 'sort must be newest, oldest, or az.', 'ValidationError');
+		const source = library && query.source !== undefined ? query.source : includeShared(user) ? 'all' : 'mine';
+		if (typeof source !== 'string' || !['mine', 'shared', 'all'].includes(source)) throw new ApiError(422, 'source must be mine, shared, or all.', 'ValidationError');
+		const where = sourceWhere(user, source);
 		const order = sort === 'az' ? 'title COLLATE NOCASE ASC,id ASC' : `created ${sort === 'oldest' ? 'ASC' : 'DESC'},rowid ${sort === 'oldest' ? 'ASC' : 'DESC'}`;
 		const pattern = `%${search.replace(/[\\%_]/g, '\\$&')}%`;
-		const total = ctx.db.get<{ count: number }>("SELECT count(*) AS count FROM audio WHERE owner_id=? AND title LIKE ? ESCAPE '\\'", user.id, pattern)?.count ?? 0;
-		const rows = ctx.db.all<AudioRecord>(`SELECT * FROM audio WHERE owner_id=? AND title LIKE ? ESCAPE '\\' ORDER BY ${order} LIMIT ? OFFSET ?`, user.id, pattern, perPage, (page - 1) * perPage);
-		const items = rows.map(row => metadata(row, legacy));
-		return legacy ? { items, pagination: { total, pages: Math.ceil(total / perPage), page, size: perPage } } : items;
+		const filter = `${where.sql} AND (title LIKE ? ESCAPE '\\' OR description LIKE ? ESCAPE '\\' OR EXISTS (SELECT 1 FROM json_each(audio.tags) WHERE value LIKE ? ESCAPE '\\'))`;
+		const values = [...where.values, pattern, pattern, pattern];
+		const total = ctx.db.get<{ count: number }>(`SELECT count(*) AS count FROM audio WHERE ${filter}`, ...values)?.count ?? 0;
+		const rows = ctx.db.all<AudioRecord>(`SELECT * FROM audio WHERE ${filter} ORDER BY ${order} LIMIT ? OFFSET ?`, ...values, perPage, (page - 1) * perPage);
+		const items = rows.map(row => metadata(row, legacy, user));
+		return legacy || library ? { items, pagination: { total, pages: Math.ceil(total / perPage), page, size: perPage } } : items;
 	}
 	app.get('/v1/audio/list', request => list(request, false));
 	app.get('/my/audio', request => list(request, true));
-	app.get('/v1/audio/view', request => metadata(find(queryId(request), owner(request).id)));
+	app.get('/library/audio', request => list(request, false, true));
+	app.get('/library/options', () => ({
+		categories: ctx.db.all<{ id: string; name: string }>('SELECT id,name FROM audio_categories ORDER BY rowid'),
+		licenses: audioLicenses, shared_folder: Boolean(ctx.config.sharedDir),
+	}));
+	app.get('/library/preferences', request => ({ include_shared: includeShared(owner(request)) }));
+	app.patch('/library/preferences', request => {
+		const user = owner(request); const body = objectBody(request.body);
+		const include = boolean(body.include_shared, 'include_shared');
+		ctx.db.run('INSERT INTO library_preferences(user_id,include_shared) VALUES (?,?) ON CONFLICT(user_id) DO UPDATE SET include_shared=excluded.include_shared', user.id, Number(include));
+		return { include_shared: include };
+	});
+	app.post('/admin/shared/rescan', async request => { admin(request); return { files: await shared.scan(true) }; });
+	app.get('/admin/categories', request => { admin(request); return { items: ctx.db.all('SELECT id,name FROM audio_categories ORDER BY rowid') }; });
+	app.post('/admin/categories', (request, reply) => {
+		admin(request); const body = objectBody(request.body);
+		const id = requiredString(body.id, 'id', 64); const name = requiredString(body.name, 'name', 100);
+		if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(id) || ['voice-over', 'sound-design'].includes(id)) throw new ApiError(422, 'Use a lowercase category ID with letters, numbers, and hyphens.', 'ValidationError');
+		if (ctx.db.get('SELECT id FROM audio_categories WHERE id=?', id)) throw new ApiError(409, 'This category ID is already in use.', 'Conflict');
+		ctx.db.run('INSERT INTO audio_categories(id,name) VALUES (?,?)', id, name);
+		return reply.code(201).send({ id, name });
+	});
+	app.patch<{ Params: { id: string } }>('/admin/categories/:id', request => {
+		admin(request); const id = request.params.id;
+		if (!ctx.db.get('SELECT id FROM audio_categories WHERE id=?', id)) throw new ApiError(404, 'Category not found.', 'NotFound');
+		const name = requiredString(objectBody(request.body).name, 'name', 100);
+		ctx.db.run('UPDATE audio_categories SET name=? WHERE id=?', name, id); return { id, name };
+	});
+	app.delete<{ Params: { id: string } }>('/admin/categories/:id', (request, reply) => {
+		admin(request); const id = request.params.id;
+		if (!ctx.db.get('SELECT id FROM audio_categories WHERE id=?', id)) throw new ApiError(404, 'Category not found.', 'NotFound');
+		if (id === 'other' || ctx.db.get('SELECT id FROM audio WHERE category=? LIMIT 1', id)) throw new ApiError(409, 'The default category or a category used by audio cannot be deleted.', 'Conflict');
+		ctx.db.run('DELETE FROM audio_categories WHERE id=?', id); return reply.code(204).send();
+	});
+	function resolveAudio(request: FastifyRequest, username: string, slug: string) {
+		const row = ctx.db.get<AudioRecord>('SELECT audio.* FROM audio JOIN users ON users.id=audio.owner_id WHERE users.username=? AND audio.slug=?', username, slug);
+		if (!row) throw new ApiError(404, 'Audio not found.', 'NotFound');
+		return metadata(visible(request, row.id), false, request.headers.authorization ? owner(request) : undefined);
+	}
+	app.get('/library/audio/resolve', request => {
+		const query = objectBody(request.query);
+		return resolveAudio(request, requiredString(query.username, 'username', 100), requiredString(query.slug, 'slug', 100));
+	});
+	app.get<{ Params: { username: string; slug: string } }>('/public/audio/by-slug/:username/:slug', request => resolveAudio(request, request.params.username, request.params.slug));
+	app.get<{ Params: { id: string } }>('/library/audio/:id', request => metadata(visible(request, request.params.id), false, request.headers.authorization ? owner(request) : undefined));
+	function patchAudio(request: FastifyRequest, id: string) {
+		const user = owner(request); const row = editable(id, user); const body = objectBody(request.body);
+		if (!Object.keys(body).some(key => mutableFields.has(key))) throw new ApiError(422, 'Supply at least one editable audio field.', 'ValidationError');
+		const updated = validateMetadata(ctx.db, body, row); ensureUnique(updated); saveMetadata(ctx.db, updated, now());
+		return metadata(find(id), false, user);
+	}
+	app.patch<{ Params: { id: string } }>('/library/audio/:id', request => patchAudio(request, request.params.id));
+	app.patch('/library/audio/batch', request => {
+		const user = owner(request); const body = objectBody(request.body);
+		if (!Array.isArray(body.items) || !body.items.length || body.items.length > 1000) throw new ApiError(422, 'items must contain between 1 and 1000 audio edits.', 'ValidationError');
+		const ids = new Set<string>();
+		const edits = body.items.map(value => {
+			const edit = objectBody(value); const id = requiredString(edit.id, 'id', 100);
+			if (ids.has(id)) throw new ApiError(422, 'Each audio ID may appear only once.', 'ValidationError');
+			ids.add(id);
+			if (!Object.keys(edit).some(key => mutableFields.has(key))) throw new ApiError(422, 'Supply at least one editable audio field for each item.', 'ValidationError');
+			return validateMetadata(ctx.db, edit, editable(id, user));
+		});
+		ctx.db.transaction(() => {
+			const targets = new Set<string>();
+			for (const row of edits) {
+				const key = `${row.owner_id}:${row.slug}`;
+				if (targets.has(key)) throw new ApiError(409, 'Two edits use the same audio slug.', 'Conflict');
+				targets.add(key);
+				const conflict = ctx.db.get<{ id: string }>('SELECT id FROM audio WHERE owner_id=? AND slug=? AND id<>?', row.owner_id, row.slug, row.id);
+				if (conflict && !ids.has(conflict.id)) throw new ApiError(409, 'This audio slug is already in use.', 'Conflict');
+			}
+			// Temporary unique values permit atomic swaps without breaking the unique index.
+			for (const row of edits) ctx.db.run('UPDATE audio SET slug=? WHERE id=?', `batch-${randomUUID()}`, row.id);
+			for (const row of edits) saveMetadata(ctx.db, row, now());
+		});
+		return { items: edits.map(row => metadata(find(row.id), false, user)) };
+	});
+	app.get('/v1/audio/view', request => {
+		const user = owner(request); const id = queryId(request);
+		let row: AudioRecord;
+		try { row = find(id, user.id); }
+		catch (error) {
+			row = find(id);
+			if (!(row.origin === 'shared-folder' || row.visibility === 'public' && ctx.blobs.ready(row.blob_id))) throw error;
+		}
+		return metadata(row, false, user);
+	});
 	app.get<{ Params: { id: string } }>('/audio/:id', request => metadata(visible(request, request.params.id)));
 	app.get<{ Params: { id: string } }>('/public/audio/:id', request => {
 		const row = find(request.params.id);
-		if (row.visibility === 'private' || !ctx.blobs.ready(row.blob_id)) throw new ApiError(404, 'Audio not found.', 'NotFound');
+		if (row.origin !== 'upload' || row.visibility === 'private' || !ctx.blobs.ready(row.blob_id)) throw new ApiError(404, 'Audio not found.', 'NotFound');
 		return metadata(row);
 	});
 	app.get('/public/audio', request => {
 		const { page, perPage } = pageQuery(request.query);
-		const where = "visibility='public' AND blob_id IN (SELECT id FROM blobs WHERE state='ready')";
+		const where = "origin='upload' AND visibility='public' AND blob_id IN (SELECT id FROM blobs WHERE state='ready')";
 		const total = ctx.db.get<{ count: number }>(`SELECT count(*) AS count FROM audio WHERE ${where}`)?.count ?? 0;
 		const rows = ctx.db.all<AudioRecord>(`SELECT * FROM audio WHERE ${where} ORDER BY created DESC,rowid DESC LIMIT ? OFFSET ?`, perPage, (page - 1) * perPage);
 		return { items: rows.map(row => metadata(row)), pagination: { total, pages: Math.ceil(total / perPage), page, size: perPage } };
 	});
 	app.get<{ Params: { id: string } }>('/download/:id', request => {
 		const row = visible(request, request.params.id, true);
+		if (row.origin === 'shared-folder') return { items: [{ format: audioFormat(row.shared_mime), url: shared.downloadUrl(row), size: row.shared_size, source: true }] };
 		const blob = ctx.blobs.ready(row.blob_id);
 		if (!blob) throw new ApiError(409, 'The audio upload is not ready.', 'Conflict');
 		return { items: [{ format: audioFormat(blob.mime), url: ctx.blobs.downloadUrl(blob.id), size: blob.size, source: true }] };
@@ -230,7 +288,7 @@ export function registerAudioRoutes(app: FastifyInstance, ctx: Context): void {
 		const row = find(queryId(request), owner(request).id);
 		const body = objectBody(request.body);
 		if (!Object.keys(body).some(key => mutableFields.has(key))) throw new ApiError(422, 'Supply at least one editable audio field.', 'ValidationError');
-		const updated = validateMetadata(body, row);
+		const updated = validateMetadata(ctx.db, body, row);
 		ensureUnique(updated);
 		ctx.db.run('UPDATE audio SET title=?,slug=?,category=?,description=?,tags=?,license=?,visibility=?,is_downloadable=?,updated=? WHERE id=?',
 			updated.title, updated.slug, updated.category, updated.description, updated.tags, updated.license, updated.visibility, updated.is_downloadable, now(), updated.id);
