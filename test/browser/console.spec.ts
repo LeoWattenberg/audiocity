@@ -58,7 +58,7 @@ test('console manages uploads, sharing, accounts and session lifecycle', async (
 		await page.getByRole('button', { name: 'Upload files', exact: true }).click();
 		await expect(page.getByRole('heading', { name: 'Library', exact: true })).toBeVisible();
 		await expect(page.getByRole('heading', { name: maliciousTitle, exact: true })).toBeVisible();
-		await expect(page.locator('img')).toHaveCount(0);
+		await expect(page.locator('#workspace img')).toHaveCount(0);
 		const card = page.locator('article').filter({ has: page.getByRole('heading', { name: maliciousTitle, exact: true }) });
 		await expect(card).toContainText('ready · private');
 		await card.locator('summary').click();

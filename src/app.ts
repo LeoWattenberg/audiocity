@@ -14,6 +14,7 @@ import { Database } from './database.ts';
 import { registerConsoleRoutes } from './console.ts';
 import { registerProjectRoutes } from './projects.ts';
 import { registerPlaybackAssets } from './playback-assets.ts';
+import { registerBrandAssets } from './branding.ts';
 
 export async function createApp(overrides: Partial<Config> = {}) {
 	const config = { ...readConfig(), ...overrides };
@@ -75,6 +76,7 @@ export async function createApp(overrides: Partial<Config> = {}) {
 		await registerAudioRoutes(app, ctx);
 		await registerProjectRoutes(app, ctx);
 		await registerPlaybackAssets(app);
+		registerBrandAssets(app);
 		registerConsoleRoutes(app, ctx);
 		await app.ready();
 		return { app, ctx, bootstrapPassword };

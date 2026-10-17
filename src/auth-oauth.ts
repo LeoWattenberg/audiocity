@@ -4,6 +4,7 @@ import { ApiError, now, objectBody, requiredString } from './core.ts';
 import type { Authentication, AuthClient, TokenGrant } from './auth.ts';
 import { digest, scopeValue, secret } from './auth.ts';
 import { audacityLinkHtml, authorizationHtml, browserHandoffHtml } from './auth-ui.ts';
+import { brandIcons } from './branding.ts';
 
 interface Flow {
 	hash: string; cookie_hash: string; client_id: string; redirect_uri: string;
@@ -68,9 +69,9 @@ export class OAuthAuthorization {
 	}
 	private linkCallback(body: Record<string, unknown>, reply: FastifyReply) {
 		reply.header('Cache-Control', 'no-store').header('Referrer-Policy', 'no-referrer')
-			.header('Content-Security-Policy', "default-src 'none'; style-src 'unsafe-inline'; frame-ancestors 'none'; base-uri 'none'");
+			.header('Content-Security-Policy', "default-src 'none'; img-src 'self'; style-src 'unsafe-inline'; frame-ancestors 'none'; base-uri 'none'");
 		if (body.code === undefined) {
-			return reply.type('text/html').send('<!doctype html><title>Audiocity</title><p>Return to your application and use Sign-in and get the token to link your account.</p>');
+			return reply.type('text/html').send(`<!doctype html><title>Audiocity</title>${brandIcons}<p>Return to your application and use Sign-in and get the token to link your account.</p>`);
 		}
 		const code = requiredString(body.code, 'code', 200);
 		const grant = this.auth.db.get<Code>('SELECT * FROM oauth_codes WHERE hash = ? AND expires > ?', digest(code), now());
@@ -93,7 +94,7 @@ export class OAuthAuthorization {
 		if (target.origin !== this.auth.config.publicUrl || target.username || target.password) throw new ApiError(422, 'Browser destination must belong to this Audiocity server.');
 		const nonce = secret();
 		return reply.header('Cache-Control', 'no-store').header('Referrer-Policy', 'no-referrer')
-			.header('Content-Security-Policy', `default-src 'none'; script-src 'nonce-${nonce}'; style-src 'self'; frame-ancestors 'none'; base-uri 'none'`)
+			.header('Content-Security-Policy', `default-src 'none'; img-src 'self'; script-src 'nonce-${nonce}'; style-src 'self'; frame-ancestors 'none'; base-uri 'none'`)
 			.type('text/html; charset=utf-8').send(browserHandoffHtml(token, target.href, nonce));
 	}
 	private registerClient(body: Record<string, unknown>, reply: FastifyReply) {
@@ -136,7 +137,7 @@ export class OAuthAuthorization {
 		const source = `${target.protocol}//${target.host}${target.pathname}`.replaceAll(/[^A-Za-z0-9.:/[\]_%~-]/gu,
 			character => `%${character.codePointAt(0)!.toString(16).padStart(2, '0').toUpperCase()}`);
 		return reply.header('Cache-Control', 'no-store').header('Referrer-Policy', 'no-referrer')
-			.header('Content-Security-Policy', `default-src 'none'; style-src 'unsafe-inline'; form-action 'self' ${source}; frame-ancestors 'none'; base-uri 'none'`)
+			.header('Content-Security-Policy', `default-src 'none'; img-src 'self'; style-src 'unsafe-inline'; form-action 'self' ${source}; frame-ancestors 'none'; base-uri 'none'`)
 			.type('text/html; charset=utf-8').send(html);
 	}
 	private async finish(request: FastifyRequest, reply: FastifyReply) {

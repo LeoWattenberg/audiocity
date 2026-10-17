@@ -448,7 +448,8 @@ void test('OAuth form CSP cannot acquire directives or wildcard hosts from a reg
 			assert.equal(page.statusCode, 200);
 			const policy = String(page.headers['content-security-policy']);
 			assert.ok(!policy.includes('*'));
-			assert.equal(policy.split(';').length, 5);
+			assert.equal(policy.split(';').length, 6);
+			assert.ok(policy.includes("img-src 'self';"));
 			assert.ok(!policy.includes(';script-src'));
 		}
 		const legacy = await f.app.inject(`/auth/authorize?${new URLSearchParams({ response_type: 'code', client_id: f.config.audacityClientId, redirect_uri: 'audacity://link', scope: 'all' })}`);
