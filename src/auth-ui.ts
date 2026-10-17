@@ -20,6 +20,20 @@ ${error ? `<p class="error" role="alert">${escapeHtml(error)}</p>` : ''}
 </form><p>Only enter credentials for this Audiocity server.</p></main></html>`;
 }
 
+export function audacityLinkHtml(code: string): string {
+	const token = `audacity://link?${new URLSearchParams({ authorization_code: code })}`;
+	return `<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Your Audacity linking token</title><style>
+body{font:16px/1.5 system-ui,sans-serif;background:#f3f5f8;color:#172536;margin:0;padding:2rem}
+main{max-width:36rem;margin:5vh auto;padding:2rem;background:white;border-radius:1rem}
+textarea{box-sizing:border-box;width:100%;padding:1rem;font:inherit;overflow-wrap:anywhere}
+</style><main><h1>Your Audacity linking token</h1>
+<p>Copy the entire link below, paste it into Audacity's Token field, then choose Continue.</p>
+<label for="audacity-token">Token</label><textarea id="audacity-token" rows="4" readonly spellcheck="false">${escapeHtml(token)}</textarea>
+<p>This token can be used once and expires two minutes after sign-in. If it expires, use Sign-in and get the token again.</p>
+</main></html>`;
+}
+
 export function browserHandoffHtml(token: string, target: string, nonce: string, email: string): string {
 	const scriptValue = (value: string) => JSON.stringify(value).replace(/</g, '\\u003c');
 	return `<!doctype html><html lang="en"><meta charset="utf-8"><title>Opening Audiocity</title>

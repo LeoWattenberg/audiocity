@@ -54,10 +54,12 @@ void test('invalid credentials, missing bearer, and expired tokens are rejected'
 	const f = await fixture();
 	try {
 		assert.equal((await f.login({ password: 'incorrect password' })).statusCode, 401);
-		assert.equal((await f.app.inject('/auth/me')).statusCode, 401);
+		for (const path of ['/me', '/auth/me', '/user/me']) assert.equal((await f.app.inject(path)).statusCode, 401);
 		const token = (await f.login()).json<{ access_token: string }>().access_token;
 		f.db.run('UPDATE auth_tokens SET access_expires = 1');
-		assert.equal((await f.app.inject({ url: '/auth/me', headers: { authorization: `Bearer ${token}` } })).statusCode, 401);
+		for (const path of ['/me', '/auth/me', '/user/me']) {
+			assert.equal((await f.app.inject({ url: path, headers: { authorization: `Bearer ${token}` } })).statusCode, 401);
+		}
 	} finally { await f.close(); }
 });
 
@@ -107,6 +109,15 @@ void test('Audacity password grant validates its configured local client credent
 		const response = await f.login({ client_id: f.config.audacityClientId, client_secret: f.config.audacityClientSecret, scope: 'all' });
 		assert.equal(response.statusCode, 200);
 		assert.equal(response.json<{ token_type: string }>().token_type, 'Bearer');
+		const token = response.json<{ access_token: string }>().access_token;
+		const me = await f.app.inject({ url: '/me', headers: { authorization: `Bearer ${token}` } });
+		assert.equal(me.statusCode, 200);
+		const user = me.json<{ id: string; username: string; avatar: string; profile: { name: string } }>();
+		assert.ok(user.id && user.username);
+		assert.equal(user.avatar, '');
+		assert.equal(user.profile.name, 'admin');
+		const handoff = await f.app.inject(`/auth/check-and-redirect?${new URLSearchParams({ token, user: user.id, url: `${f.config.publicUrl}/${user.username}/audio/uploaded-audio/edit` })}`);
+		assert.equal(handoff.statusCode, 200);
 	} finally { await f.close(); }
 });
 
@@ -221,6 +232,43 @@ void test('legacy Audacity can authorize without PKCE and codes expire', async (
 	} finally { await f.close(); }
 });
 
+void test('Audacity 3 manual linking displays a one-time URI bound to its configured browser callback', async () => {
+	const f = await fixture();
+	try {
+		const redirect = `${f.config.publicUrl}/auth/callback`;
+		const page = await f.app.inject(`/auth/authorize?${new URLSearchParams({ response_type: 'code', client_id: f.config.audacityClientId, redirect_uri: redirect, scope: 'all' })}`);
+		const flow = page.body.match(/name="flow" value="([^"]+)"/)?.[1];
+		const cookie = String(page.headers['set-cookie']).split(';')[0];
+		const approved = await f.app.inject({ method: 'POST', url: '/auth/authorize', headers: { cookie }, payload: { flow, username: f.config.adminEmail, password: f.config.adminPassword, consent: 'allow' } });
+		assert.equal(approved.statusCode, 303);
+		const target = new URL(String(approved.headers.location));
+		assert.equal(target.origin + target.pathname, redirect);
+		const callback = await f.app.inject(target.pathname + target.search);
+		assert.equal(callback.statusCode, 200);
+		assert.equal(callback.headers['cache-control'], 'no-store');
+		assert.equal(callback.headers['referrer-policy'], 'no-referrer');
+		assert.ok(String(callback.headers['content-security-policy']).includes("default-src 'none'"));
+		const token = callback.body.match(/<textarea[^>]*>([^<]+)<\/textarea>/)?.[1];
+		assert.ok(token);
+		const uri = new URL(token);
+		assert.equal(uri.protocol, 'audacity:');
+		assert.equal(uri.hostname, 'link');
+		const code = uri.searchParams.get('authorization_code');
+		assert.equal(code, target.searchParams.get('code'));
+		assert.equal(uri.searchParams.has('code'), false, 'Audacity uses authorization_code to select OAuthRedirectURL instead of audacity://link.');
+		const grant = { grant_type: 'authorization_code', client_id: f.config.audacityClientId, client_secret: f.config.audacityClientSecret, redirect_uri: redirect, code };
+		assert.equal((await f.app.inject({ method: 'POST', url: '/auth/token', payload: { ...grant, redirect_uri: 'audacity://link' } })).statusCode, 401);
+		const exchange = await f.app.inject({ method: 'POST', url: '/auth/token', payload: grant });
+		assert.equal(exchange.statusCode, 200);
+		assert.equal((await f.app.inject({ url: '/me', headers: { authorization: `Bearer ${exchange.json<{ access_token: string }>().access_token}` } })).statusCode, 200);
+		assert.equal((await f.app.inject(target.pathname + target.search)).statusCode, 401);
+		assert.equal((await f.app.inject({ method: 'POST', url: '/auth/token', payload: grant })).statusCode, 401);
+		assert.equal((await f.app.inject('/auth/callback?code=invalid')).statusCode, 401);
+		const other = await authorize(f, await registerClient(f));
+		assert.equal((await f.app.inject(`/auth/callback?code=${other.code ?? ''}`)).statusCode, 401);
+	} finally { await f.close(); }
+});
+
 void test('generated administrator password is returned once and consent can be denied without credentials', async () => {
 	const f = await fixture({ adminPassword: undefined });
 	try {
@@ -318,9 +366,10 @@ void test('Audacity browser handoff validates token ownership and only redirects
 	const f = await fixture();
 	try {
 		const token = (await f.login()).json<{ access_token: string }>().access_token;
-		const user = f.db.get<{ id: string }>('SELECT id FROM users');
+		const user = f.db.get<{ id: string; username: string }>('SELECT id, username FROM users');
 		assert.ok(user);
-		const params = new URLSearchParams({ token, user: user.id, url: `${f.config.publicUrl}/` });
+		const path = `/${user.username}/audio/uploaded-recording/edit?mtm_campaign=Audacity&mtm_source=Audacity-3.7.9&mtm_content=Share_Audio_Menu`;
+		const params = new URLSearchParams({ token, user: user.id, url: path });
 		const handoff = await f.app.inject(`/auth/check-and-redirect?${params}`);
 		assert.equal(handoff.statusCode, 200);
 		assert.equal(handoff.headers['cache-control'], 'no-store');
@@ -343,13 +392,40 @@ void test('Audacity browser handoff validates token ownership and only redirects
 		assert.equal(destination, undefined);
 		assert.ok(clicked); clicked();
 		assert.deepEqual(stored, [['audiocity.access-token', token]]);
-		assert.equal(destination, `${f.config.publicUrl}/`);
-		params.set('url', 'https://evil.example/');
-		assert.equal((await f.app.inject(`/auth/check-and-redirect?${params}`)).statusCode, 422);
+		assert.equal(destination, `${f.config.publicUrl}${path}`);
+		for (const url of ['https://evil.example/', '//evil.example/path', String.raw`\\evil.example\path`, String.raw`/\evil.example/path`, 'http://localhost:3000@evil.example/', 'http://user:pass@localhost:3000/', 'javascript:alert(1)', 'http://[invalid', '//projects.evil.example/123', '//projects:8080/123', '//projects@evil.example/123', String.raw`//projects\@evil.example/123`, '//projects/123/../../evil', '//projects/unrecognized/path', 'http://projects/123']) {
+			params.set('url', url);
+			assert.equal((await f.app.inject(`/auth/check-and-redirect?${params}`)).statusCode, 422, url);
+		}
 		params.set('url', `${f.config.publicUrl}/`); params.set('user', 'other-user');
 		assert.equal((await f.app.inject(`/auth/check-and-redirect?${params}`)).statusCode, 401);
 		params.set('user', user.id); params.set('token', 'invalid');
 		assert.equal((await f.app.inject(`/auth/check-and-redirect?${params}`)).statusCode, 401);
+	} finally { await f.close(); }
+});
+
+void test('Audacity project links restore a missing cached owner without treating projects as an external host', async () => {
+	const f = await fixture();
+	try {
+		const token = (await f.login()).json<{ access_token: string }>().access_token;
+		const user = f.auth.userFromToken(token);
+		for (const suffix of ['', '?mtm_campaign=Audacity', '/12345678-1234-4234-8234-123456789abc?mtm_campaign=Audacity&mtm_source=Audacity-3.7.9', '/123?mtm_campaign=Audacity']) {
+			const params = new URLSearchParams({ token, user: user.id, url: `//projects${suffix}` });
+			const handoff = await f.app.inject(`/auth/check-and-redirect?${params}`);
+			assert.equal(handoff.statusCode, 200, suffix);
+			const script = handoff.body.match(/<script nonce="[^"]+">([\s\S]*?)<\/script>/)?.[1];
+			assert.ok(script);
+			let clicked: (() => void) | undefined;
+			let destination: string | undefined;
+			runInNewContext(script, {
+				history: { replaceState() {} },
+				document: { getElementById: () => ({ addEventListener: (_event: string, handler: () => void) => { clicked = handler; } }) },
+				sessionStorage: { setItem() {} },
+				location: { replace: (url: string) => { destination = url; } }
+			});
+			assert.ok(clicked); clicked();
+			assert.equal(destination, `${f.config.publicUrl}/${user.username}/projects${suffix}`);
+		}
 	} finally { await f.close(); }
 });
 

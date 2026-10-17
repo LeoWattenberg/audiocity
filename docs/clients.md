@@ -28,18 +28,20 @@ Audacity 3 reads its cloud server settings from `audacity.cfg`. Its [ServiceConf
    ApiEndpoint=http://localhost:8080
    OAuthClientID=audiocity-desktop
    OAuthClientSecret=audiocity-local-desktop
-   OAuthRedirectURL=audacity://link
-   OAuthLoginPage=http://localhost:8080/auth/authorize?response_type=code&client_id={auth_client_id}&redirect_uri=audacity%3A%2F%2Flink&scope=all
+   OAuthRedirectURL=http://localhost:8080/auth/callback
+   OAuthLoginPage=http://localhost:8080/auth/authorize?response_type=code&client_id={auth_client_id}&redirect_uri=http%3A%2F%2Flocalhost%3A8080%2Fauth%2Fcallback&scope=all
    FrontendURL=http://localhost:8080
    AuthWithRedirectURL=http://localhost:8080/auth/check-and-redirect
    TourPage=http://localhost:8080/
    FinishUploadPage=http://localhost:8080/
    ```
 
-   For a remote server, replace every `http://localhost:8080` with its reachable HTTPS origin, such as `https://audiocity.example.org`, matching `AUDIOCITY_PUBLIC_URL`. Keep `ApiEndpoint` as the origin without a trailing slash or `/v1` suffix. Keep `OAuthRedirectURL=audacity://link` and the encoded `redirect_uri` unchanged: these return the browser to Audacity.
+   For a remote server, replace every `http://localhost:8080` with its reachable HTTPS origin, such as `https://audiocity.example.org`, matching `AUDIOCITY_PUBLIC_URL`. Also replace the URL-encoded `redirect_uri` in `OAuthLoginPage` with that server's encoded `/auth/callback` URL. The decoded value must exactly match `OAuthRedirectURL`. Keep `ApiEndpoint` as the origin without a trailing slash or `/v1` suffix.
 
    `OAuthClientID` and `OAuthClientSecret` must match the server's `AUDIOCITY_AUDACITY_CLIENT_ID` and `AUDIOCITY_AUDACITY_CLIENT_SECRET`. The login-page `{auth_client_id}` placeholder is expanded by Audacity; leave it literal. These are local compatibility values, independent of audio.com credentials and your Audiocity account password.
-5. Save the file and restart Audacity. Open **Help → Link audio.com account…**, then choose **Sign-in and get the token** to open your server's consent page. Sign in with your Audiocity account and allow the browser to open the `audacity://link` callback in Audacity. The menu still uses the audio.com name. Test saving and reopening a small cloud project before relying on synchronization.
+5. Save the file and restart Audacity. Open **Help → Link audio.com account…**, then choose **Sign-in and get the token** to open your server's consent page. Sign in with your Audiocity account and choose **Allow access**. The browser displays a token starting with `audacity://link?authorization_code=`. Copy the entire value into Audacity's **Token** field and choose **Continue** within two minutes. The menu still uses the audio.com name. Test saving and reopening a small cloud project before relying on synchronization.
+
+The Help menu uses a manual token dialog; a browser callback does not fill its Token field. Audiocity's `/auth/callback` page supplies the complete URI that dialog expects. Audacity 3 also fetches `/me` after either browser linking or direct password sign-in; that response supplies the account ID used by the upload flow's browser handoff.
 
 To switch back, unlink the Audiocity account, close Audacity, and restore your backed-up configuration (or remove the overridden entries to restore audio.com defaults), then restart and link your audio.com account again.
 

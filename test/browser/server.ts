@@ -29,6 +29,7 @@ try {
 	const fixture = await createApp({
 		dataDir: directory, logger: false, publicUrl: `http://127.0.0.1:${port}`, port,
 		adminEmail: 'browser@example.test', adminPassword: 'browser-admin-password',
+		audacityClientId: 'browser-audacity', audacityClientSecret: 'browser-desktop-secret',
 	});
 	app = fixture.app;
 	if (!(fixture.ctx.auth instanceof Authentication)) throw new Error('The browser fixture requires local authentication.');

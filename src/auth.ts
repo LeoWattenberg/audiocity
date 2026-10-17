@@ -226,7 +226,7 @@ export function registerAuthRoutes(app: FastifyInstance, context: Pick<Context, 
 		auth.requireAdmin(request);
 		return reply.code(201).send(await auth.createUser(objectBody(request.body)));
 	});
-	for (const path of ['/auth/me', '/user/me']) {
+	for (const path of ['/me', '/auth/me', '/user/me']) {
 		app.get(path, (request, reply) => {
 			reply.header('Cache-Control', 'no-store');
 			const user = auth.requireUser(request);

@@ -1,6 +1,6 @@
 import { ApiError, now } from './core.ts';
 import type { Context } from './core.ts';
-import { descriptor, getSnapshot, snapshotBlocks } from './projects-store.ts';
+import { descriptor, getSnapshot, projectClientId, snapshotBlocks } from './projects-store.ts';
 import type { BlockRow, ProjectRow, SnapshotRow } from './projects-store.ts';
 
 export function snapshotInfo(ctx: Context, snapshot: SnapshotRow, expand = false) {
@@ -25,7 +25,7 @@ export function projectInfo(ctx: Context, project: ProjectRow) {
 	const synced = project.synced_id ? getSnapshot(ctx, project, project.synced_id) : undefined;
 	const info = synced ? snapshotInfo(ctx, synced) : undefined;
 	return {
-		id: project.id, username: owner?.username ?? '', author_name: owner?.name ?? '',
+		id: projectClientId(ctx, project), username: owner?.username ?? '', author_name: owner?.name ?? '',
 		slug: project.slug, name: project.name, details: project.details,
 		date_created: project.created, date_updated: project.updated,
 		size: info ? info.file_size + info.blocks_size : 0,

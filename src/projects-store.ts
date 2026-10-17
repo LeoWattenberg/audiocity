@@ -38,6 +38,14 @@ export function projectSchema(ctx: Context): void {
 			owner_id TEXT NOT NULL, hash TEXT NOT NULL, PRIMARY KEY(snapshot_id, hash)
 		);
 		CREATE INDEX IF NOT EXISTS project_blocks_canonical_hash ON project_blocks(owner_id, lower(hash));
+		CREATE TABLE IF NOT EXISTS native_project_ids (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			project_id TEXT NOT NULL UNIQUE REFERENCES projects(id) ON DELETE CASCADE
+		);
+		INSERT INTO native_project_ids (project_id)
+			SELECT p.id FROM projects p JOIN snapshots s ON p.head_id=s.id
+			WHERE s.format='audacity' AND NOT EXISTS (SELECT 1 FROM native_project_ids n WHERE n.project_id=p.id)
+			ORDER BY p.created,p.id;
 	`);
 }
 
@@ -61,9 +69,18 @@ export function projectForm(body: Record<string, unknown>): ProjectForm {
 }
 
 export function getProject(ctx: Context, user: User, id: string): ProjectRow {
-	const row = ctx.db.get<ProjectRow>('SELECT * FROM projects WHERE id=? AND owner_id=?', id, user.id);
+	const native = /^[1-9]\d*$/.test(id)
+		? ctx.db.get<{ project_id: string }>('SELECT project_id FROM native_project_ids WHERE id=? AND CAST(id AS TEXT)=?', id, id)
+		: undefined;
+	const row = ctx.db.get<ProjectRow>('SELECT * FROM projects WHERE id=? AND owner_id=?', native?.project_id ?? id, user.id);
 	if (!row) throw new ApiError(404, 'Project not found.', 'NotFound');
 	return row;
+}
+
+export function projectClientId(ctx: Context, project: ProjectRow): string {
+	// Audacity 3 uses this ID in unquoted SQL identifiers and an INTEGER PRIMARY KEY.
+	// Preserve the storage UUID and legacy routes while returning a stable decimal ID.
+	return ctx.db.get<{ id: string }>('SELECT CAST(id AS TEXT) AS id FROM native_project_ids WHERE project_id=?', project.id)?.id ?? project.id;
 }
 
 export function getSnapshot(ctx: Context, project: ProjectRow, id: string): SnapshotRow {
@@ -91,6 +108,7 @@ export function createSnapshot(ctx: Context, project: ProjectRow, form: ProjectF
 	const format = form.format ?? previous?.format ?? 'audacity';
 	if (format !== 'audacity' && form.hashes.length) throw new ApiError(422, 'Whole-file projects do not accept audio block hashes.', 'ValidationError');
 	if (previous && (format === 'audacity') !== (previous.format === 'audacity')) throw new ApiError(422, 'Create a separate project when switching between block snapshots and whole-file archives.', 'ValidationError');
+	if (!previous && format === 'audacity') ctx.db.run('INSERT INTO native_project_ids (project_id) VALUES (?)', project.id);
 	const id = randomUUID(); const date = now();
 	const file = ctx.blobs.create(project.owner_id, {
 		kind: format === 'audacity' ? 'project-file' : 'project-archive', resourceId: id,

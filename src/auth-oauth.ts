@@ -3,7 +3,7 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { ApiError, now, objectBody, requiredString } from './core.ts';
 import type { Authentication, AuthClient, TokenGrant } from './auth.ts';
 import { digest, scopeValue, secret } from './auth.ts';
-import { authorizationHtml, browserHandoffHtml } from './auth-ui.ts';
+import { audacityLinkHtml, authorizationHtml, browserHandoffHtml } from './auth-ui.ts';
 
 interface Flow {
 	hash: string; cookie_hash: string; client_id: string; redirect_uri: string;
@@ -64,15 +64,32 @@ export class OAuthAuthorization {
 		app.get('/auth/authorize', limited, (request, reply) => this.start(objectBody(request.query), reply));
 		app.post('/auth/authorize', limited, async (request, reply) => this.finish(request, reply));
 		app.get('/auth/check-and-redirect', limited, (request, reply) => this.browserHandoff(objectBody(request.query), reply));
-		app.get('/auth/callback', (_request, reply) => reply.type('text/html').send('<!doctype html><title>Audiocity</title><p>Return to your application to finish linking your account.</p>'));
+		app.get('/auth/callback', (request, reply) => this.linkCallback(objectBody(request.query), reply));
+	}
+	private linkCallback(body: Record<string, unknown>, reply: FastifyReply) {
+		reply.header('Cache-Control', 'no-store').header('Referrer-Policy', 'no-referrer')
+			.header('Content-Security-Policy', "default-src 'none'; style-src 'unsafe-inline'; frame-ancestors 'none'; base-uri 'none'");
+		if (body.code === undefined) {
+			return reply.type('text/html').send('<!doctype html><title>Audiocity</title><p>Return to your application and use Sign-in and get the token to link your account.</p>');
+		}
+		const code = requiredString(body.code, 'code', 200);
+		const grant = this.auth.db.get<Code>('SELECT * FROM oauth_codes WHERE hash = ? AND expires > ?', digest(code), now());
+		if (!grant || grant.client_id !== this.auth.config.audacityClientId || grant.redirect_uri !== `${this.auth.config.publicUrl}/auth/callback`) {
+			throw new ApiError(401, 'Linking token expired or already used. Use Sign-in and get the token again.', 'Unauthorized');
+		}
+		return reply.type('text/html; charset=utf-8').send(audacityLinkHtml(code));
 	}
 	private browserHandoff(body: Record<string, unknown>, reply: FastifyReply) {
 		const token = requiredString(body.token, 'token', 200);
 		const user = this.auth.userFromToken(token);
 		if (body.user !== user.id) throw new ApiError(401, 'Token does not belong to the requested account.');
 		const raw = requiredString(body.url, 'url', 2048);
+		// Audacity 3's integer-keyed owner cache cannot store legacy UUID project IDs,
+		// so it can omit the username and emit "//projects/ID" after a save.
+		const missingOwner = raw.match(/^\/\/projects((?:\/(?:[a-f\d]{8}-[a-f\d]{4}-[a-f\d]{4}-[a-f\d]{4}-[a-f\d]{12}|\d+))?(?:\?[^#]*)?)$/i);
+		const destination = missingOwner ? `/${user.username}/projects${missingOwner[1]}` : raw;
 		let target: URL;
-		try { target = new URL(raw); } catch { throw new ApiError(422, 'Invalid browser destination.'); }
+		try { target = new URL(destination, this.auth.config.publicUrl); } catch { throw new ApiError(422, 'Invalid browser destination.'); }
 		if (target.origin !== this.auth.config.publicUrl || target.username || target.password) throw new ApiError(422, 'Browser destination must belong to this Audiocity server.');
 		const nonce = secret();
 		return reply.header('Cache-Control', 'no-store').header('Referrer-Policy', 'no-referrer')
