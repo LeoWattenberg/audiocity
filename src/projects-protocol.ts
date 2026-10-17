@@ -3,6 +3,13 @@ import type { Context } from './core.ts';
 import { descriptor, getSnapshot, projectClientId, snapshotBlocks } from './projects-store.ts';
 import type { BlockRow, ProjectRow, SnapshotRow } from './projects-store.ts';
 
+export function snapshotPreview(ctx: Context, snapshot: SnapshotRow) {
+	const preview = snapshot.synced ? ctx.blobs.ready(snapshot.mixdown_id) : undefined;
+	return preview && preview.mime !== 'application/octet-stream' ? {
+		url: ctx.blobs.downloadUrl(preview.id), mime: preview.mime, size: preview.size, snapshot_id: snapshot.id,
+	} : null;
+}
+
 export function snapshotInfo(ctx: Context, snapshot: SnapshotRow, expand = false) {
 	const file = ctx.blobs.ready(snapshot.file_id);
 	const blocks = snapshotBlocks(ctx, snapshot);
@@ -13,6 +20,7 @@ export function snapshotInfo(ctx: Context, snapshot: SnapshotRow, expand = false
 		blocks_size: blocks.reduce((total, block) => total + (ctx.blobs.ready(block.blob_id)?.size ?? 0), 0),
 		format: snapshot.format, transport: snapshot.format === 'audacity' ? 'blocks' : 'file',
 		...(expand ? {
+			preview: snapshotPreview(ctx, snapshot),
 			file_url: file ? ctx.blobs.downloadUrl(file.id) : '',
 			blocks: blocks.filter((block) => ctx.blobs.ready(block.blob_id)).map((block) => ({ hash: block.hash.toLowerCase(), url: ctx.blobs.downloadUrl(block.blob_id) })),
 		} : {}),
@@ -24,6 +32,10 @@ export function projectInfo(ctx: Context, project: ProjectRow) {
 	const head = project.head_id ? getSnapshot(ctx, project, project.head_id) : undefined;
 	const synced = project.synced_id ? getSnapshot(ctx, project, project.synced_id) : undefined;
 	const info = synced ? snapshotInfo(ctx, synced) : undefined;
+	const previewSnapshot = ctx.db.get<SnapshotRow>(`SELECT s.* FROM snapshots s JOIN blobs b ON s.mixdown_id=b.id
+		WHERE s.project_id=? AND s.synced>0 AND b.state='ready' AND b.mime!='application/octet-stream'
+		ORDER BY s.created DESC,s.rowid DESC LIMIT 1`, project.id);
+	const preview = previewSnapshot ? snapshotPreview(ctx, previewSnapshot) : null;
 	return {
 		id: projectClientId(ctx, project), username: owner?.username ?? '', author_name: owner?.name ?? '',
 		slug: project.slug, name: project.name, details: project.details,
@@ -32,6 +44,7 @@ export function projectInfo(ctx: Context, project: ProjectRow) {
 		head: head ? snapshotInfo(ctx, head) : null,
 		latest_synced_snapshot_id: project.synced_id,
 		latest_synced_format: synced?.format ?? '',
+		preview: preview ? { ...preview, is_current: previewSnapshot!.id === project.synced_id } : null,
 		format: head?.format ?? 'audacity', transport: head?.format === 'audacity' ? 'blocks' : 'file',
 	};
 }

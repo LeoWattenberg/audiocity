@@ -1,16 +1,31 @@
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { open } from 'node:fs/promises';
 import { ApiError, now, objectBody, pageQuery } from './core.ts';
-import type { Context } from './core.ts';
+import type { BlobInfo, Context } from './core.ts';
 import { completeSnapshot, projectInfo, snapshotInfo, syncState } from './projects-protocol.ts';
 import { collectUnusedBlocks, createProject, createSnapshot, getProject, getSnapshot, projectForm, projectSchema } from './projects-store.ts';
 import type { ProjectRow, SnapshotRow } from './projects-store.ts';
+import { inspectAudio } from './audio-formats.ts';
 
 interface ProjectParams { projectId: string; snapshotId: string }
 const ids = (request: FastifyRequest) => request.params as ProjectParams;
 
-export function registerProjectRoutes(app: FastifyInstance, ctx: Context): void {
+export async function registerProjectRoutes(app: FastifyInstance, ctx: Context): Promise<void> {
 	projectSchema(ctx);
+	ctx.blobs.setValidator('project-mixdown', async (blob, path) => {
+		const { mime } = await inspectAudio(path);
+		ctx.db.run('UPDATE blobs SET mime=? WHERE id=?', mime, blob.id);
+	});
+	// Earlier versions accepted mixdowns but labeled every container as WAV.
+	for (const blob of ctx.db.all<BlobInfo>("SELECT * FROM blobs WHERE kind='project-mixdown' AND state IN ('uploaded','ready')")) {
+		try {
+			const { mime } = await inspectAudio(blob.path);
+			if (mime !== blob.mime) ctx.db.run('UPDATE blobs SET mime=? WHERE id=?', mime, blob.id);
+		} catch {
+			// Retain unrecognized legacy bytes without advertising them as playable audio.
+			ctx.db.run("UPDATE blobs SET mime='application/octet-stream' WHERE id=?", blob.id);
+		}
+	}
 	ctx.blobs.setValidator('project-archive', async (_blob, path) => {
 		const file = await open(path, 'r');
 		try {

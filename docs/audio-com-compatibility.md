@@ -41,5 +41,7 @@ This compatibility does not include collections, cover-image uploads, social
 operations, statistics, subscription policies, processing/transcoding, waveforms,
 or author/collection search results. Audio search matches literal substrings
 rather than audio.com's relevance ranking. The absence of media transcoding means
-browser playback remains limited to codecs supported by that browser. Native
-Audacity desktop end-to-end validation remains outstanding.
+browser playback remains limited to codecs supported by that browser. Windows
+Audacity 3.7.9 has been tested manually for login, audio upload, cloud project
+save/reopen, and preview generation against a WSL-hosted server. Other versions
+still require validation.

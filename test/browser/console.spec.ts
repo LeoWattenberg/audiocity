@@ -82,6 +82,32 @@ test('console manages uploads, sharing, accounts and session lifecycle', async (
 		await expect(page.getByRole('heading', { name: maliciousTitle, exact: true })).toBeVisible();
 	});
 
+	await test.step('native project mixdowns play in the library and revision history', async () => {
+		const headers = { authorization: `Bearer ${await currentToken(page)}` };
+		const created = await request.post('/project', { headers, data: { name: 'Playable project', blocks: [] } });
+		expect(created.status()).toBe(200);
+		const project = await created.json() as { project: { id: string }; snapshot: { id: string }; sync: { file: { url: string; success: string }; mixdown: { url: string; success: string } } };
+		for (const [descriptor, bytes] of [[project.sync.file, Buffer.from('serialized project')], [project.sync.mixdown, audioFixture()]] as const) {
+			expect((await request.put(descriptor.url, { headers: { 'content-type': 'application/octet-stream' }, data: bytes })).status()).toBe(200);
+			expect((await request.post(descriptor.success)).status()).toBe(200);
+		}
+		expect((await request.post(`/project/${project.project.id}/snapshot/${project.snapshot.id}/sync`, { headers })).status()).toBe(204);
+		await choose(page, 'Project library');
+		const card = page.locator('article').filter({ has: page.getByRole('heading', { name: 'Playable project', exact: true }) });
+		await card.locator('summary').click();
+		await card.getByRole('button', { name: 'Preview audio', exact: true }).click();
+		await expect(card.getByLabel('Audio preview for Playable project')).toBeVisible();
+		await expect.poll(() => card.locator('audio').evaluate((audio: HTMLAudioElement) => audio.readyState)).toBeGreaterThanOrEqual(1);
+		await card.locator('audio').evaluate((audio: HTMLAudioElement) => audio.play());
+		await card.locator('summary').click();
+		await card.getByRole('button', { name: 'Revisions', exact: true }).click();
+		await expect(page.getByRole('heading', { name: 'Revisions: Playable project' })).toBeVisible();
+		const revision = page.locator('article').first();
+		await revision.locator('summary').click();
+		await revision.getByRole('button', { name: 'Preview audio', exact: true }).click();
+		await expect.poll(() => revision.locator('audio').evaluate((audio: HTMLAudioElement) => audio.readyState)).toBeGreaterThanOrEqual(1);
+	});
+
 	await test.step('AUP3 archives upload and revision downloads preserve exact bytes', async () => {
 		await choose(page, 'Upload AUP3/AUP4');
 		const archivePath = testInfo.outputPath('Fixture.aup3');

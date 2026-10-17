@@ -115,7 +115,7 @@ export function createSnapshot(ctx: Context, project: ProjectRow, form: ProjectF
 		mime: 'application/octet-stream', maxBytes: format === 'audacity' ? 256 * 1024 * 1024 : ctx.config.maxUploadBytes,
 		...(form.size === undefined ? {} : { expectedSize: form.size }),
 	});
-	const mixdown = ctx.blobs.create(project.owner_id, { kind: 'project-mixdown', resourceId: id, mime: 'audio/wav' });
+	const mixdown = ctx.blobs.create(project.owner_id, { kind: 'project-mixdown', resourceId: id, mime: 'application/octet-stream' });
 	ctx.db.run('INSERT INTO snapshots (id,project_id,parent_id,previous_head_id,format,file_id,file_upload,mixdown_id,mixdown_upload,created,updated) VALUES (?,?,?,?,?,?,?,?,?,?,?)', id, project.id, form.head || project.head_id, project.head_id, format, file.id, JSON.stringify(file), mixdown.id, JSON.stringify(mixdown), date, date);
 	for (const hash of form.hashes) {
 		let block = ctx.db.get<BlockRow>(`SELECT b.* FROM project_blocks b LEFT JOIN blobs ON blobs.id=b.blob_id

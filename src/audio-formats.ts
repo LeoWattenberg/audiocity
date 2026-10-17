@@ -17,16 +17,15 @@ export function audioFormat(mime: string): string {
 	return format;
 }
 
-/** Check the declared container, without decoding or changing the uploaded original. */
-export async function validateAudio(path: string, mime: string): Promise<number> {
+/** Inspect the container without decoding or changing the uploaded original. */
+export async function inspectAudio(path: string, expectedMime?: string): Promise<{ mime: string; duration: number }> {
 	const file = await open(path, 'r');
 	try {
 		const buffer = Buffer.alloc(65_536);
 		const { bytesRead } = await file.read(buffer, 0, buffer.length, 0);
 		const data = buffer.subarray(0, bytesRead);
 		const text = (offset: number, length: number) => data.toString('ascii', offset, offset + length);
-		const format = audioFormat(mime);
-		const matches = {
+		const matches: Record<string, boolean> = {
 			wav: data.length >= 12 && ['RIFF', 'RF64'].includes(text(0, 4)) && text(8, 4) === 'WAVE',
 			mp3: data.length >= 3 && (text(0, 3) === 'ID3' || (data[0] === 255 && ((data[1] ?? 0) & 224) === 224 && ((data[1] ?? 0) & 6) !== 0)),
 			flac: data.length >= 4 && text(0, 4) === 'fLaC',
@@ -34,16 +33,22 @@ export async function validateAudio(path: string, mime: string): Promise<number>
 			aiff: data.length >= 12 && text(0, 4) === 'FORM' && ['AIFF', 'AIFC'].includes(text(8, 4)),
 			ogg: data.length >= 27 && text(0, 4) === 'OggS',
 			m4a: data.length >= 12 && text(4, 4) === 'ftyp',
-		}[format];
-		if (!matches) throw new ApiError(422, 'The uploaded container does not match the declared audio MIME type.', 'ValidationError');
-		if (format !== 'wav') return 0;
+		};
+		const format = expectedMime === undefined ? Object.keys(matches).find(format => matches[format]) : audioFormat(expectedMime);
+		if (!format || !matches[format]) throw new ApiError(422, expectedMime === undefined ? 'Unsupported audio preview container.' : 'The uploaded container does not match the declared audio MIME type.', 'ValidationError');
+		const mime = { wav: 'audio/wav', mp3: 'audio/mpeg', flac: 'audio/flac', wv: 'audio/x-wavpack', aiff: 'audio/aiff', ogg: 'audio/ogg', m4a: 'audio/mp4' }[format]!;
+		if (format !== 'wav') return { mime, duration: 0 };
 		let byteRate = 0;
 		for (let offset = 12; offset + 8 <= data.length;) {
 			const length = data.readUInt32LE(offset + 4);
 			if (text(offset, 4) === 'fmt ' && length >= 16 && offset + 24 <= data.length) byteRate = data.readUInt32LE(offset + 16);
-			if (text(offset, 4) === 'data' && byteRate) return Math.round(length / byteRate * 1000);
+			if (text(offset, 4) === 'data' && byteRate) return { mime, duration: Math.round(length / byteRate * 1000) };
 			offset += 8 + length + length % 2;
 		}
-		return 0;
+		return { mime, duration: 0 };
 	} finally { await file.close(); }
+}
+
+export async function validateAudio(path: string, mime: string): Promise<number> {
+	return (await inspectAudio(path, mime)).duration;
 }

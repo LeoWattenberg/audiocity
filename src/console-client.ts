@@ -226,10 +226,28 @@ export const consoleClient = String.raw`'use strict';
 		for (const project of result.items) {
 			const article = card(project.name, project.format.toUpperCase() + ' · ' + project.transport + ' transport · ' + project.size.toLocaleString() + ' bytes');
 			const actions = [['Revisions', () => revisions(project)]];
+			if (project.preview) {
+				actions.push(['Preview audio', () => projectPreview(article, project)]);
+				if (!project.preview.is_current) article.append(node('p', 'The audio preview is from an earlier revision. Use Update Cloud Audio Preview in Audacity to refresh it.'));
+			} else if (project.transport === 'blocks') article.append(node('p', 'No audio preview yet. Use Update Cloud Audio Preview in Audacity to create one.'));
+			if (project.transport === 'blocks') actions.push(['Update preview in Audacity', () => { location.href = 'audacity://generate-audio?projectId=' + encodeURIComponent(project.id); }]);
 			if (project.transport === 'file') actions.push(['Upload revision', () => projectUpload(project)]);
 			actionMenu(article, actions);
 		}
 		pagination(page, page < result.pagination.pages, projectList);
+	}
+	async function projectPreview(article, project, revision) {
+		const path = '/project/' + encodeURIComponent(project.id) + (revision ? '/snapshot/' + encodeURIComponent(revision.id) : '');
+		const fresh = await api(path);
+		if (!fresh.preview) throw new Error('No audio preview is available. Use Update Cloud Audio Preview in Audacity.');
+		let audio = article.querySelector('audio');
+		if (!audio) {
+			audio = node('audio'); audio.controls = true; audio.preload = 'metadata';
+			audio.setAttribute('aria-label', 'Audio preview for ' + project.name);
+			on(audio, 'error', () => { tell('This audio preview cannot play in this browser.', true); });
+			article.append(audio);
+		}
+		audio.src = safeUrl(fresh.preview.url); audio.focus();
 	}
 	async function revisions(project, page = 1) {
 		requireSession(); const result = await api('/project/' + encodeURIComponent(project.id) + '/snapshot?per-page=20&page=' + page);
@@ -238,11 +256,14 @@ export const consoleClient = String.raw`'use strict';
 			const date = new Date(revision.date_created * 1000).toLocaleString();
 			const article = card(date, revision.format.toUpperCase() + ' · ' + (revision.date_synced ? 'synchronized' : 'incomplete') + ' · ' + revision.file_size.toLocaleString() + ' file bytes');
 			article.append(node('p', 'Revision ' + revision.id));
-			if (revision.transport === 'file' && revision.date_synced && revision.file_url) actionMenu(article, [['Download archive', async () => {
+			const actions = [];
+			if (revision.preview) actions.push(['Preview audio', () => projectPreview(article, project, revision)]);
+			if (revision.transport === 'file' && revision.date_synced && revision.file_url) actions.push(['Download archive', async () => {
 				const fresh = await api('/project/' + encodeURIComponent(project.id) + '/snapshot/' + encodeURIComponent(revision.id));
 				download(fresh.file_url, project.name.replace(/[\\/]/g, '-') + '.' + fresh.format);
-			}]]);
-			else if (revision.transport === 'blocks') article.append(node('p', (revision.blocks || []).length + ' audio blocks. These snapshots require an Audacity-compatible client for reconstruction; this console shows metadata only.'));
+			}]);
+			else if (revision.transport === 'blocks') article.append(node('p', 'Open this cloud revision in Audacity to edit it.'));
+			if (actions.length) actionMenu(article, actions);
 		}
 		pagination(page, page < result.pagination.pages, next => revisions(project, next));
 	}

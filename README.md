@@ -8,9 +8,9 @@ Implemented:
 - Original sound uploads: WAV, MP3, FLAC, WavPack, AIFF, Ogg, and M4A, with private, unlisted, or public visibility and HTTP range playback/downloads.
 - Audacity's native cloud snapshot/block protocol, missing-block reuse, resumable transfers, revisions, conflict detection, and history.
 - Complete AUP3/AUP4 file revisions for clients such as Soundscaper, preserving the uploaded SQLite file byte for byte.
-- A small browser console for accounts, uploads, libraries, sharing, and project archive downloads. Actions are available through its menu.
+- A small browser console for accounts, uploads, libraries, sharing, project audio previews, and project archive downloads. Actions are available through its menu. Audacity's **Update Cloud Audio Preview** supplies native project previews; older previews are labeled when a later save has no mixdown.
 
-Compatibility is implemented and tested against the observed protocol. Native Audacity desktop end-to-end testing remains outstanding. Clients must be configured to use Audiocity: [Audacity 3 setup](docs/clients.md#audacity-3-select-your-server-in-audacitycfg) uses `audacity.cfg`; Audacity 4 currently hardcodes its cloud server and requires a custom build, [Soundscaper](https://soundscaper.org) has a preference in Edit→Preferences→Advanced. Whole-file archive storage and Audacity's native block transport are separate, explicitly identified formats. See [client setup](docs/clients.md) and [protocol details](docs/project-protocol.md).
+Compatibility is tested against the observed protocol, with manual Windows Audacity 3.7.9 testing against a WSL-hosted server for login, audio upload, cloud project save/reopen, and preview generation. Other editor versions still require validation. Clients must be configured to use Audiocity: [Audacity 3 setup](docs/clients.md#audacity-3-select-your-server-in-audacitycfg) uses `audacity.cfg`; Audacity 4 currently hardcodes its cloud server and requires a custom build, [Soundscaper](https://soundscaper.org) has a preference in Edit→Preferences→Advanced. Whole-file archive storage and Audacity's native block transport are separate, explicitly identified formats. See [client setup](docs/clients.md) and [protocol details](docs/project-protocol.md).
 
 ## Start
 

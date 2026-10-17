@@ -40,7 +40,11 @@ export async function createApp(overrides: Partial<Config> = {}) {
 				route.config = { ...route.config, rateLimit: route.config?.rateLimit ?? { max: 60, timeWindow: '1 minute' } };
 			}
 		});
-		app.addHook('onSend', (_request, reply, _payload, done) => {
+		app.addHook('onSend', (request, reply, _payload, done) => {
+			// Audacity 3 caches POST handles when it sees Keep-Alive, but leaves
+			// CURLOPT_POSTFIELDS set after an empty POST, corrupting the next JSON save.
+			// Closing POST connections also suppresses Node's implicit Keep-Alive header.
+			if (request.method === 'POST') reply.header('connection', 'close');
 			reply.header('x-content-type-options', 'nosniff').header('referrer-policy', 'no-referrer')
 				.header('x-frame-options', 'DENY').header('cache-control', 'no-store');
 			done();
@@ -62,13 +66,13 @@ export async function createApp(overrides: Partial<Config> = {}) {
 		});
 		app.get('/.well-known/audiocity', () => ({
 			name: 'Audiocity', version: '0.1.0', url: config.publicUrl,
-			features: ['audio-uploads', 'audacity-block-sync', 'aup3-archives', 'aup4-archives', 'oauth-pkce'],
+			features: ['audio-uploads', 'audacity-block-sync', 'project-audio-previews', 'aup3-archives', 'aup4-archives', 'oauth-pkce'],
 			limits: { max_upload_bytes: config.maxUploadBytes, max_user_bytes: config.maxUserBytes },
 		}));
 		await registerBlobRoutes(app, blobs);
 		registerAuthRoutes(app, ctx);
 		registerAudioRoutes(app, ctx);
-		registerProjectRoutes(app, ctx);
+		await registerProjectRoutes(app, ctx);
 		registerConsoleRoutes(app, ctx);
 		await app.ready();
 		return { app, ctx, bootstrapPassword };

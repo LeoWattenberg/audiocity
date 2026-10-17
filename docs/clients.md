@@ -57,7 +57,9 @@ Audiocity supports the inspected Audacity 4 authentication contracts: password s
 
 Native cloud-project list/open uses `/project` without a format filter. Whole-file AUP3/AUP4 archives are intentionally absent from that list because the native downloader expects its serialized metadata plus separate blocks. Importing a whole-file archive into Audacity is a normal file-open operation after downloading the file through the console or archive API.
 
-Native desktop end-to-end validation remains outstanding. Tests in this repository verify the source-derived HTTP contract, rather than launching or modifying Audacity.
+Login, audio upload, cloud project save/reopen, and preview generation have been tested manually with Windows Audacity 3.7.9 against a WSL-hosted server. Automated tests verify the HTTP contract and browser workflows; they do not launch Audacity. Other editor versions still require validation.
+
+**Update Cloud Audio Preview** uploads audio that can be played in the console under **Project library → Actions → Preview audio**, including in revision history. Refresh the library after generation finishes. A regular save does not render a new preview, so older audio is labeled when it belongs to an earlier revision. Audacity may add a local filename suffix such as `_1` when reopening; this does not rename the cloud project.
 
 ## Soundscaper or another browser editor
 
